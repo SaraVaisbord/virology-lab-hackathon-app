@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data & generated artifacts
+backend/data/app.db*
+backend/data/uploads/*
+backend/data/pages_img/*
+!backend/data/**/__init__.py
+backend/results/
+backend/fiels/
+Downloads/
+export_check.xlsx
+
+# Sample medical documents (keep out of git)
+התחייבויות דוגמאות/

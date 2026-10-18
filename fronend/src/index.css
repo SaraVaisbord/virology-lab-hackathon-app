@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    font-family: 'Heebo', 'Assistant', sans-serif;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #F4F7F6;
+    @apply text-navy-800 dark:bg-slate-950 dark:text-gray-100;
+    direction: rtl;
+  }
+
+  button, input, select {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 dark:focus-visible:ring-teal-500;
+  }
+
+  :root {
+    --color-primary: #1e3a6e;
+    --color-teal: #14b8a6;
+    --color-magenta: #ec4899;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white dark:bg-slate-900 rounded-2xl border-0;
+    box-shadow: 0 2px 12px 0 rgba(30, 58, 110, 0.07), 0 1px 3px 0 rgba(30, 58, 110, 0.04);
+  }
+
+  .btn-primary {
+    @apply bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-150 dark:bg-teal-500 dark:hover:bg-teal-400;
+  }
+
+  .btn-ghost {
+    @apply text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150;
+  }
+
+  .uncertain-cell {
+    @apply rounded-full px-2.5 py-0.5 cursor-pointer transition-all duration-150 text-pink-700 dark:text-pink-300 font-medium text-xs bg-pink-50 dark:bg-transparent border border-pink-200 dark:border-pink-800 hover:border-pink-400 dark:hover:border-pink-500 hover:bg-pink-50/80;
+  }
+}
