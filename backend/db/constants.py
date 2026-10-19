@@ -52,8 +52,8 @@ LOCAL_LABEL_LEXICON = {
     "id_number": {"keywords": ('ת"ז', "ת.ז", "מ.ז", "זהות"), "requires_one_of": (), "exclude_if_line_has": ()},
     "received_date": {
         # A page has many dates; "ת.קבלה" / "קבלה" / "התקבל" (strong) say "received", plain "תאריך" (weak) doesn't.
-        "keywords": ("תאריך", "התקבל", "קבלה", "ת.קבלה"),
-        "strong_keywords": ("התקבל", "קבלה", "ת.קבלה"),
+        "keywords": ("תאריך", "התקבל", "נתקבל", "קבלה", "ת.קבלה"),
+        "strong_keywords": ("התקבל", "נתקבל", "קבלה", "ת.קבלה"),
         "requires_one_of": (),
         "exclude_if_line_has": ("לידה", "שחרור", "הדגימה", "לשחרור"),
     },

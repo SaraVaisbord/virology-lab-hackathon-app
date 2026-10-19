@@ -63,6 +63,9 @@ OCR_TESSDATA_DIR = os.getenv("OCR_TESSDATA_DIR", str(Path.home() / "tessdata"))
 OCR_LANGUAGES = os.getenv("OCR_LANGUAGES", "heb+eng")
 OCR_TIMEOUT_SECONDS = _env_int("OCR_TIMEOUT_SECONDS", 60)
 
+# Handwritten digits: MNIST CNN (ONNX model zoo, MIT licence, ~26 KB) run with OpenCV — see handwriting_digits.py.
+HANDWRITTEN_DIGITS_MODEL = Path(os.getenv("HANDWRITTEN_DIGITS_MODEL", str(BASE_DIR / "models" / "mnist-12.onnx")))
+
 # ── Field validation ─────────────────────────────────────────────────────────
 # A received date further than this from today is suspicious (e.g. a handwritten 6 read as 0).
 RECEIVED_DATE_MAX_AGE_DAYS = _env_int("RECEIVED_DATE_MAX_AGE_DAYS", 365)
