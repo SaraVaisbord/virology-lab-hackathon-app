@@ -37,12 +37,34 @@ def _normalize_page(image: Image.Image) -> Image.Image:
     return image
 
 
+# A page whose only image covers at least this share of it is a scan — use that image instead of re-rendering.
+_SCAN_COVERAGE = 0.9
+
+
+def _pdf_page_image(doc, page) -> Image.Image:
+    """The scan embedded in the page at its own resolution (re-rendering loses detail), scaled to PAGE_RENDER_DPI;
+    pages that aren't a single scan (vector PDFs, several images) are rendered at PAGE_RENDER_DPI."""
+    images = page.get_images(full=True)
+    if len(images) == 1:
+        rects = page.get_image_rects(images[0][0])
+        covered = sum(r.width * r.height for r in rects) / (page.rect.width * page.rect.height)
+        if covered >= _SCAN_COVERAGE:
+            info = doc.extract_image(images[0][0])
+            image = Image.open(io.BytesIO(info["image"])).convert("RGB")
+            dpi = image.width / (page.rect.width / 72)
+            if abs(dpi - config.PAGE_RENDER_DPI) > 5:
+                scale = config.PAGE_RENDER_DPI / dpi
+                image = image.resize((round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS)
+            return image
+    pix = page.get_pixmap(dpi=config.PAGE_RENDER_DPI, alpha=False)
+    return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+
+
 def _iter_pages(file_bytes: bytes, file_type: str) -> Iterator[Image.Image]:
     if file_type == "pdf":
         with pymupdf.open(stream=file_bytes, filetype="pdf") as doc:
             for page in doc:
-                pix = page.get_pixmap(dpi=config.PAGE_RENDER_DPI, alpha=False)
-                yield Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                yield _pdf_page_image(doc, page)
     else:
         yield Image.open(io.BytesIO(file_bytes))
 

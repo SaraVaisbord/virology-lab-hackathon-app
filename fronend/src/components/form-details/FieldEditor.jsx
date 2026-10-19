@@ -71,11 +71,11 @@ function SourceEvidence({ field, sources, onUse }) {
                 אותו מספר זוהה גם כ: {assignment.also_claimed_by.map(meta.fieldLabel).join(', ')}
               </p>
             )}
-            {evidence.llm_alternatives?.length > 0 && (
-              <p className="mt-1.5 text-xs text-gray-600 dark:text-gray-300">ערכים נוספים שה-AI הציע: {evidence.llm_alternatives.join(', ')}</p>
-            )}
           </>
-        ) : <p className="text-sm text-gray-500">{EMPTY}</p>}
+        ) : <p className="text-sm text-gray-500 dark:text-gray-400">ה-AI לא החזיר ערך זה{sources?.llm_result ? '' : ' (לא הופעל לעמוד זה)'}</p>}
+        {evidence.alternatives?.length > 0 && (
+          <p className="mt-1.5 text-xs text-gray-600 dark:text-gray-300">ערכים נוספים שנמצאו לשדה: {evidence.alternatives.join(', ')}</p>
+        )}
       </SourceRow>
 
       <SourceRow icon={Barcode} title={meta.source_labels.barcode}>
@@ -98,7 +98,26 @@ function SourceEvidence({ field, sources, onUse }) {
       </SourceRow>
 
       <SourceRow icon={ScanText} title={meta.source_labels.ocr}>
-        <p className="text-sm text-gray-500 dark:text-gray-400">{sourceStatusText(ocrSource) ?? (field.ocr_value || 'לא נמצא ערך תואם')}</p>
+        {sourceStatusText(ocrSource) ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{sourceStatusText(ocrSource)}</p>
+        ) : evidence.ocr ? (
+          <ValueLine
+            value={evidence.ocr.raw}
+            note={[
+              evidence.ocr.label ? `ליד התווית "${evidence.ocr.label}"` : 'נקרא בעמוד, בלי תווית ליד – מאשר את הקריאה, לא את השדה',
+              evidence.ocr.source === 'barcode' ? 'הערך נקרא מברקוד שליד התווית' : null,
+              evidence.ocr.confidence != null && evidence.ocr.source !== 'barcode' ? `ביטחון OCR ${Math.round(evidence.ocr.confidence)}` : null,
+            ].filter(Boolean).join(' · ')}
+            onUse={onUse}
+          />
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">לא נמצאה תווית מתאימה עם ערך זה בסריקה המקומית</p>
+        )}
+        {assignment?.ocr_assigned_elsewhere?.length > 0 && (
+          <p className="mt-1.5 text-xs text-orange-700 dark:text-orange-300">
+            בסריקה המקומית המספר נמצא ליד תווית של: {assignment.ocr_assigned_elsewhere.map(meta.fieldLabel).join(', ')}
+          </p>
+        )}
       </SourceRow>
     </div>
   )

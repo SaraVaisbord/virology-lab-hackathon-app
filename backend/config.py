@@ -35,8 +35,10 @@ DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{(DATA_DIR / 'app.db').a
 # ── Uploads & page rendering ─────────────────────────────────────────────────
 MAX_FILE_SIZE_MB = _env_int("MAX_FILE_SIZE_MB", 50)
 MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
-PAGE_RENDER_DPI = _env_int("PAGE_RENDER_DPI", 200)
-PAGE_MAX_SIDE_PX = _env_int("PAGE_MAX_SIDE_PX", 2000)
+# Pages are stored at this resolution (scans embedded in PDFs are taken as-is when they are close to it).
+# 300 dpi is what OCR needs; the old 200 dpi + 2000 px cap left only ~171 dpi on A4.
+PAGE_RENDER_DPI = _env_int("PAGE_RENDER_DPI", 300)
+PAGE_MAX_SIDE_PX = _env_int("PAGE_MAX_SIDE_PX", 3600)  # A4 at 300 dpi is 3508 px high
 
 # ── API ──────────────────────────────────────────────────────────────────────
 CORS_ORIGINS = [
@@ -67,6 +69,10 @@ RECEIVED_DATE_MAX_AGE_DAYS = _env_int("RECEIVED_DATE_MAX_AGE_DAYS", 365)
 
 # ── Extraction queue ─────────────────────────────────────────────────────────
 WORKER_ENABLED = _env_bool("WORKER_ENABLED", True)
+# With LLM_ENABLED=false the queue still runs the free local stages (preprocessing, barcodes, OCR) — no tokens.
+LLM_ENABLED = _env_bool("LLM_ENABLED", True)
+# OCR-only values below this Tesseract confidence (0..100) are marked uncertain.
+LOCAL_OCR_MIN_CONFIDENCE = _env_int("LOCAL_OCR_MIN_CONFIDENCE", 60)
 WORKER_CONCURRENCY = _env_int("WORKER_CONCURRENCY", 2)
 WORKER_IDLE_POLL_SECONDS = _env_int("WORKER_IDLE_POLL_SECONDS", 5)
 

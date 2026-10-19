@@ -29,7 +29,7 @@ from typing import Any
 from PIL import Image
 
 import config
-from db.constants import CONFIDENCE_LEVELS, FIELDS
+from db.constants import CONFIDENCE_LEVELS, FIELDS, INVENTORY_KINDS, UNASSIGNED
 
 logger = logging.getLogger(__name__)
 
@@ -232,9 +232,23 @@ def response_schema() -> dict[str, Any]:
         },
         "required": ["value", "confidence"],
     }
-    properties = {name: {"type": "ARRAY", "items": candidate} for name in FIELDS}
+    # Inventory of every number on the page — forces an exhaustive scan before fields are filled (without it the
+    # model returned only 14 of 31 barcode values on the samples) and keeps numbers it can't assign.
+    inventory_item = {
+        "type": "OBJECT",
+        "properties": {
+            "value": {"type": "STRING"},
+            "kind": {"type": "STRING", "enum": list(INVENTORY_KINDS)},
+            "label": {"type": "STRING"},
+            "assigned_to": {"type": "STRING", "enum": [*FIELDS, UNASSIGNED]},
+            "box_2d": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+        },
+        "required": ["value", "kind", "assigned_to"],
+    }
+    properties = {"all_numbers": {"type": "ARRAY", "items": inventory_item}}
+    properties.update({name: {"type": "ARRAY", "items": candidate} for name in FIELDS})
     properties["notes"] = {"type": "STRING"}
-    return {"type": "OBJECT", "properties": properties, "required": list(FIELDS)}
+    return {"type": "OBJECT", "properties": properties, "required": ["all_numbers", *FIELDS]}
 
 
 def _parse_response(response) -> dict[str, Any]:

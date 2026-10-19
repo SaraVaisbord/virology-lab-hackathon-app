@@ -15,6 +15,10 @@ FIELD_LABELS = {
 }
 FIELDS = tuple(FIELD_LABELS)
 
+# LLM page inventory (all_numbers): how each number appears on the page, and the "not assigned" marker.
+INVENTORY_KINDS = ("barcode", "sticker", "printed", "handwritten")
+UNASSIGNED = "none"
+
 # Fields that may legitimately hold several values on one page.
 MULTI_VALUE_FIELDS = frozenset({"central_number", "commitment_number"})
 
@@ -117,8 +121,10 @@ REASONS = {
     "barcode_near_match": "ברקוד בעמוד שונה בתו אחד מקריאת ה-AI: {barcode}",
     "claimed_by_other_field": "אותו מספר זוהה גם כ{other} – לא ברור לאיזה שדה הוא שייך",
     "label_points_elsewhere": "התווית ליד הערך ('{label}') מתאימה ל{other}",
-    "assignment_llm_only": "הערך תואם לברקוד, אך השיוך לשדה מבוסס על ה-AI בלבד (אין OCR לאימות התווית)",
+    "assignment_llm_only": "הערך נקרא בכמה מקורות, אך השיוך לשדה מבוסס על ה-AI בלבד – לא נמצאה תווית מתאימה ליד הערך ב-OCR",
     "single_source": "הערך נקרא רק על ידי ה-AI – אין מקור נוסף שמאשר אותו",
+    "local_only": "הערך נמצא ליד התווית בסריקה המקומית בלבד – אין מקור נוסף שמאשר את הקריאה",
+    "ocr_label_elsewhere": "התווית שזוהתה ב-OCR ליד אותו מספר מתאימה ל{other}",
     "invalid_id_checksum": 'ספרת הביקורת של מספר ת"ז אינה תקינה',
     "invalid_date": "פורמט התאריך לא זוהה",
     "implausible_date": "התאריך רחוק מהתאריך הנוכחי או עתידי – ייתכן שגיאת קריאה בספרות",
@@ -145,6 +151,7 @@ EXTRACTION_ERRORS = {
     "config": "מפתח Gemini לא הוגדר בשרת",
     "quota": "Gemini לא זמין כרגע (מכסה או עומס) – הטופס הוחזר לתור",
     "barcode": "סריקת הברקודים נכשלה",
+    "ocr": "הסריקה המקומית (OCR) נכשלה",
     "unexpected": "שגיאה לא צפויה בעיבוד הטופס",
 }
 
