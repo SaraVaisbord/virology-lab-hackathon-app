@@ -1,392 +1,214 @@
-import { useMemo, useState } from 'react'
-import { Download, Eye, FileText, Plus, Search, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, Eye, FileText, Loader2, RotateCcw, X } from 'lucide-react'
 import StatusBadge from './ui/StatusBadge'
+import { useMeta } from '../meta/MetaContext'
+import { useClickOutside } from '../hooks/useClickOutside'
+import { EMPTY, fieldDisplayValue, formatDateTime, groupFieldsByName } from '../lib/format'
 
-const FIELD_LABELS = {
-  source_file: 'שם קובץ',
-  page_number: 'עמוד',
-  status: 'סטטוס',
-  first_name: 'שם פרטי',
-  last_name: 'שם משפחה',
-  id_number: 'ת"ז',
-  central_number: 'מספר מרכזי',
-  received_date: 'תאריך קבלה',
-  sender: 'גורם שולח',
-  commitment_number: 'מספר התחייבות',
-  uploaded_at: 'תאריך העלאה',
-  actions: 'פעולות',
-}
+const LEADING_COLUMNS = ['source_file', 'page_number', 'status']
+const TRAILING_COLUMNS = ['uploaded_at']
 
-const EMPTY = '—'
-
-function normalizeText(value) {
-  return String(value ?? '').trim().toLowerCase()
-}
-
-function toDisplay(value) {
-  if (value === null || value === undefined || value === '') return EMPTY
-  return String(value)
-}
-
-function getFieldValue(form, fieldName) {
-  if (!Array.isArray(form?.fields)) return EMPTY
-  const match = form.fields.find((field) => field.field_name === fieldName)
-  if (!match) return EMPTY
-  if (match.value !== null && match.value !== undefined && match.value !== '') return match.value
-  if (match.raw_value !== null && match.raw_value !== undefined && match.raw_value !== '') return match.raw_value
-  return EMPTY
-}
-
-function getRowValue(form, key) {
-  if (key === 'source_file') return form.source_file ?? ''
-  if (key === 'page_number') return form.page_number ?? ''
-  if (key === 'status') return form.status ?? ''
-  if (key === 'received_date') return getFieldValue(form, 'received_date')
-  if (key === 'uploaded_at') return form.uploaded_at ?? ''
-  if (key === 'sender') return getFieldValue(form, 'sender')
-  if (key === 'central_number') {
-    return Array.isArray(form.central_number) ? form.central_number.map((item) => item.value ?? '').join(' ') : getFieldValue(form, 'central_number')
-  }
-  if (key === 'commitment_number') {
-    return Array.isArray(form.commitment_number) ? form.commitment_number.map((item) => item.value ?? '').join(' ') : getFieldValue(form, 'commitment_number')
-  }
-  return form[key] ?? getFieldValue(form, key) ?? ''
-}
-
-function HeaderDropdown({ columnKey, value, onSortAsc, onSortDesc, onFilterChange, onClose }) {
+function ColumnMenu({ label, filterValue, onSort, onFilter, onClose }) {
+  const ref = useClickOutside(onClose)
   return (
-    <div className="absolute left-0 top-full z-30 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900" dir="rtl">
-      <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2 dark:border-slate-700">
-        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{FIELD_LABELS[columnKey] || columnKey}</span>
+    <div ref={ref} className="absolute right-0 top-full z-30 mt-1 w-52 rounded-xl border border-slate-200 bg-white p-2 text-right shadow-lg dark:border-slate-700 dark:bg-slate-900">
+      <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-700">
+        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{label}</span>
         <button type="button" onClick={onClose} className="rounded p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="סגור">
           <X size={12} />
         </button>
       </div>
-
-      <div className="space-y-2">
-        <button type="button" onClick={onSortAsc} className="block w-full rounded-lg px-2 py-1.5 text-right text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
-          מיין סדר עולה
+      {[['asc', 'מיין סדר עולה'], ['desc', 'מיין סדר יורד']].map(([direction, text]) => (
+        <button
+          key={direction}
+          type="button"
+          onClick={() => onSort(direction)}
+          className="block w-full rounded-lg px-2 py-1.5 text-right text-xs font-normal text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          {text}
         </button>
-        <button type="button" onClick={onSortDesc} className="block w-full rounded-lg px-2 py-1.5 text-right text-xs text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
-          מיין סדר יורד
-        </button>
-
-        <div className="pt-1">
-          <label className="mb-1 block text-[10px] font-medium text-slate-500 dark:text-slate-400">סינון...</label>
-          <input
-            autoFocus
-            value={value ?? ''}
-            onChange={(event) => onFilterChange(event.target.value)}
-            placeholder="סינון..."
-            className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-400 dark:border-slate-700 dark:bg-slate-950 dark:text-gray-200"
-          />
-        </div>
-      </div>
+      ))}
+      <input
+        autoFocus
+        value={filterValue}
+        onChange={(event) => onFilter(event.target.value)}
+        placeholder="סינון..."
+        className="mt-2 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-400 dark:border-slate-700 dark:bg-slate-950 dark:text-gray-200"
+      />
     </div>
   )
 }
 
-export default function DataTable({
-  forms = [],
-  loading = false,
-  error = '',
-  onSelectForm,
-  onAddFile,
-  onExport,
-  exportMenuOpen,
-  onToggleExportMenu,
-  exportLoading = false,
-  hasUploadOpen = false,
-  statusFilter = 'all',
-  onChangeStatusFilter,
-  query = '',
-  onChangeQuery,
-  columnFilters = {},
-  onChangeColumnFilter,
-}) {
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
-  const [headerMenuKey, setHeaderMenuKey] = useState(null)
-
-  const columns = [
-    { key: 'source_file' },
-    { key: 'page_number' },
-    { key: 'status' },
-    { key: 'first_name' },
-    { key: 'last_name' },
-    { key: 'id_number' },
-    { key: 'central_number' },
-    { key: 'received_date' },
-    { key: 'sender' },
-    { key: 'commitment_number' },
-    { key: 'uploaded_at' },
-    { key: 'actions' },
-  ]
-
-  const filteredForms = useMemo(() => {
-    const rows = forms.filter((form) => {
-      const matchesStatus = statusFilter === 'all' || form.status === statusFilter
-      const haystack = [
-        getRowValue(form, 'source_file'),
-        getRowValue(form, 'page_number'),
-        getRowValue(form, 'status'),
-        getRowValue(form, 'first_name'),
-        getRowValue(form, 'last_name'),
-        getRowValue(form, 'id_number'),
-        getRowValue(form, 'sender'),
-        getRowValue(form, 'central_number'),
-        getRowValue(form, 'commitment_number'),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-
-      const searchMatches = !query || haystack.includes(normalizeText(query))
-
-      const columnFilterMatches = Object.entries(columnFilters).every(([key, filterValue]) => {
-        if (!filterValue || !String(filterValue).trim()) return true
-        const value = String(getRowValue(form, key) ?? '').toLowerCase()
-        return value.includes(String(filterValue).trim().toLowerCase())
-      })
-
-      return matchesStatus && searchMatches && columnFilterMatches
-    })
-
-    if (!sortConfig.key) return rows
-
-    return [...rows].sort((a, b) => {
-      let left = getRowValue(a, sortConfig.key)
-      let right = getRowValue(b, sortConfig.key)
-
-      if (left === null || left === undefined || left === '') left = ''
-      if (right === null || right === undefined || right === '') right = ''
-
-      const leftValue = typeof left === 'string' ? left.toLowerCase() : left
-      const rightValue = typeof right === 'string' ? right.toLowerCase() : right
-
-      if (leftValue < rightValue) return sortConfig.direction === 'asc' ? -1 : 1
-      if (leftValue > rightValue) return sortConfig.direction === 'asc' ? 1 : -1
-      return 0
-    })
-  }, [forms, query, statusFilter, columnFilters, sortConfig])
-
-  const handleSort = (key, direction) => {
-    setSortConfig({ key, direction })
-    setHeaderMenuKey(null)
+function FieldValues({ form, fieldKey, rows, onOpenField }) {
+  const meta = useMeta()
+  if (meta.isPendingForm(form.status)) {
+    return <span className="block h-4 w-20 animate-shimmer rounded bg-slate-200 dark:bg-slate-700" aria-label="בעיבוד" />
   }
+  const values = (rows || []).filter((row) => fieldDisplayValue(row) || meta.needsReview(row))
+  if (values.length === 0) return <span className="text-gray-400">{EMPTY}</span>
 
-  const renderCell = (form, key) => {
-    if (key === 'source_file') {
-      return (
-        <button
-          type="button"
-          onClick={() => onSelectForm?.(form)}
-          className="block w-full truncate text-right text-sm font-medium text-gray-700 hover:text-teal-700 dark:text-gray-200 dark:hover:text-teal-300"
-          title={form.source_file || EMPTY}
-        >
-          {form.source_file || EMPTY}
-        </button>
-      )
-    }
-
-    if (key === 'page_number') {
-      return <span className="block whitespace-nowrap text-right text-sm text-gray-700 dark:text-gray-200">{form.page_number ?? EMPTY}</span>
-    }
-
-    if (key === 'status') {
-      return <div className="flex justify-start"><StatusBadge status={form.status || 'pending'} /></div>
-    }
-
-    if (key === 'received_date' || key === 'uploaded_at') {
-      const value = key === 'received_date' ? getRowValue(form, 'received_date') : form.uploaded_at
-      if (!value) return <span className="block whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">{EMPTY}</span>
-      const date = new Date(value)
-      const display = Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('he-IL')
-      return <span className="block whitespace-nowrap text-right text-sm text-gray-700 dark:text-gray-200">{display}</span>
-    }
-
-    if (key === 'sender') {
-      const value = getRowValue(form, 'sender')
-      return <span className="block whitespace-nowrap text-right text-sm text-gray-700 dark:text-gray-200">{value || EMPTY}</span>
-    }
-
-    if (key === 'actions') {
-      return (
-        <div className="flex justify-center">
+  return (
+    <div className="flex flex-wrap gap-1">
+      {values.map((row) => {
+        const text = fieldDisplayValue(row) || meta.field_statuses[row.status]
+        const review = meta.needsReview(row)
+        return (
           <button
+            key={row.id}
             type="button"
-            onClick={() => onSelectForm?.(form)}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-            aria-label={`צפה בטופס ${form.source_file || form.id}`}
-            title="צפייה"
+            onClick={() => onOpenField(form, row.id)}
+            title={review ? row.reason || meta.field_statuses[row.status] : meta.field_statuses[row.status]}
+            className={
+              review
+                ? 'uncertain-cell max-w-[12rem] truncate text-right'
+                : `max-w-[12rem] truncate rounded-full px-2 py-0.5 text-right text-sm text-gray-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-slate-800 ${meta.isMultiValue(fieldKey) ? 'border border-slate-200 dark:border-slate-700' : ''}`
+            }
           >
-            <Eye size={14} />
+            {text}
           </button>
-        </div>
-      )
+        )
+      })}
+    </div>
+  )
+}
+
+export default function DataTable({ forms, total, loading, loadingMore, hasMore, onLoadMore, error, filters, onChangeFilters, onOpenForm, onRetry }) {
+  const meta = useMeta()
+  const [menuColumn, setMenuColumn] = useState(null)
+  const sentinelRef = useRef(null)
+
+  const columns = [...LEADING_COLUMNS, ...meta.fields.map((field) => field.key), ...TRAILING_COLUMNS]
+
+  // Infinite scroll: load the next page when the bottom of the list becomes visible.
+  useEffect(() => {
+    const node = sentinelRef.current
+    if (!node || !hasMore) return undefined
+    const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) onLoadMore() }, { rootMargin: '200px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasMore, onLoadMore])
+
+  const renderCell = (form, key, groups) => {
+    switch (key) {
+      case 'source_file':
+        return (
+          <button type="button" dir="auto" onClick={() => onOpenForm(form)} className="block max-w-[14rem] truncate text-right font-medium text-gray-800 hover:text-teal-700 dark:text-gray-100 dark:hover:text-teal-300" title={form.source_file}>
+            {form.source_file}
+          </button>
+        )
+      case 'page_number':
+        return form.page_number
+      case 'status':
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <StatusBadge status={form.status} />
+            {form.status === 'failed' && form.error && (
+              <span className="max-w-[14rem] text-[11px] leading-4 text-red-600 dark:text-red-400">{form.error}</span>
+            )}
+          </div>
+        )
+      case 'uploaded_at':
+        return <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{formatDateTime(form.uploaded_at)}</span>
+      default:
+        return <FieldValues form={form} fieldKey={key} rows={groups[key]} onOpenField={onOpenForm} />
     }
-
-    const value = form[key] ?? getFieldValue(form, key)
-    const fieldEntry = Array.isArray(form?.fields) ? form.fields.find((item) => item.field_name === key) : null
-    const isUnverified = fieldEntry && ['unverified', 'uncertain', 'not_found'].includes(fieldEntry.status)
-
-    if (isUnverified) {
-      return (
-        <button
-          type="button"
-          onClick={() => onSelectForm?.(form)}
-          className="block w-full cursor-pointer rounded-md border border-pink-300 bg-pink-50/80 px-2 py-1 text-right text-sm text-gray-700 transition hover:border-pink-400 hover:bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-300 dark:border-pink-700 dark:bg-pink-950/30 dark:text-gray-200 dark:hover:bg-pink-900/40"
-          title="פתח את תצוגת האימות"
-        >
-          {toDisplay(value)}
-        </button>
-      )
-    }
-
-    return <span className="block whitespace-nowrap text-right text-sm text-gray-700 dark:text-gray-200">{toDisplay(value)}</span>
   }
 
   return (
-    <div className="card flex h-full min-h-0 flex-col overflow-hidden rounded-xl" dir="rtl">
+    <div className="flex h-full min-h-0 flex-col">
       {error && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-          {error}
-        </div>
+        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{error}</div>
       )}
 
-      <div className="flex-none border-b border-slate-100 px-3 py-2 dark:border-slate-800">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onAddFile}
-            className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400"
-          >
-            <Plus size={15} />
-            הוסף קובץ
-          </button>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={onToggleExportMenu}
-              disabled={exportLoading}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              {exportLoading ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent" />
-                  מייצא...
-                </>
-              ) : (
-                <>
-                  <Download size={15} />
-                  ייצא לאקסל
-                </>
-              )}
-              <ChevronDown size={14} />
-            </button>
-
-            {exportMenuOpen && (
-              <div className="absolute left-0 z-30 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                <button type="button" onClick={() => onExport('all')} className="block w-full px-3 py-2 text-right text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">ייצא הכל</button>
-                <button type="button" onClick={() => onExport('filtered')} className="block w-full px-3 py-2 text-right text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">ייצא מסוננים</button>
-                <button type="button" onClick={() => onExport('new')} className="block w-full px-3 py-2 text-right text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">ייצא חדשים בלבד</button>
-              </div>
-            )}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <div className="relative w-[240px]">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-              <input
-                value={query}
-                onChange={(event) => onChangeQuery?.(event.target.value)}
-                placeholder="חיפוש"
-                className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pr-9 pl-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-400"
-              />
-            </div>
-
-            <select
-              value={statusFilter}
-              onChange={(event) => onChangeStatusFilter?.(event.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-gray-700"
-            >
-              <option value="all">הכל</option>
-              <option value="uploaded">הועלה</option>
-              <option value="processing">מעבד</option>
-              <option value="extracted">נשלף</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="h-full w-full overflow-x-auto">
-          <div className="min-w-[1200px] w-full">
-            <div className="grid grid-cols-[2.5fr_1fr_1fr_1.5fr_1.5fr_1.5fr_1.5fr_1.5fr_1.5fr_1.5fr_1.5fr_60px]">
-              {columns.map((column) => {
-                const isActionColumn = column.key === 'actions'
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full min-w-[1100px] border-separate border-spacing-0 text-sm">
+          <thead className="sticky top-0 z-20">
+            <tr>
+              {columns.map((key, index) => {
+                const label = meta.fieldLabel(key)
+                const sorted = filters.sortBy === key
+                const filtered = Boolean(filters.columnFilters[key]?.trim())
                 return (
-                  <div
-                    key={`header-${column.key}`}
-                    className={`relative border-b border-slate-200 bg-slate-50 p-3 text-right text-[11px] font-bold text-navy-700 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 ${isActionColumn ? 'flex items-center justify-center' : 'cursor-pointer select-none'}`}
+                  <th
+                    key={key}
+                    scope="col"
+                    className={`relative whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-bold text-navy-700 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 ${index === 0 ? 'sticky right-0 z-10' : ''}`}
                   >
-                    {isActionColumn ? (
-                      <span>{FIELD_LABELS[column.key]}</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setHeaderMenuKey((current) => (current === column.key ? null : column.key))}
-                        className="flex w-full items-center justify-start gap-2 text-right"
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          {FIELD_LABELS[column.key]}
-                          {sortConfig.key === column.key && (
-                            sortConfig.direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                          )}
-                        </span>
-                      </button>
-                    )}
-
-                    {!isActionColumn && headerMenuKey === column.key && (
-                      <HeaderDropdown
-                        columnKey={column.key}
-                        value={columnFilters[column.key] ?? ''}
-                        onSortAsc={() => handleSort(column.key, 'asc')}
-                        onSortDesc={() => handleSort(column.key, 'desc')}
-                        onFilterChange={(value) => onChangeColumnFilter?.(column.key, value)}
-                        onClose={() => setHeaderMenuKey(null)}
+                    <button type="button" onClick={() => setMenuColumn(menuColumn === key ? null : key)} className="inline-flex items-center gap-1 hover:text-teal-700 dark:hover:text-teal-300" aria-haspopup="menu">
+                      {label}
+                      {sorted && (filters.sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                      {filtered && <span className="h-1.5 w-1.5 rounded-full bg-teal-500" aria-label="מסונן" />}
+                    </button>
+                    {menuColumn === key && (
+                      <ColumnMenu
+                        label={label}
+                        filterValue={filters.columnFilters[key] ?? ''}
+                        onSort={(direction) => { onChangeFilters({ sortBy: key, sortDir: direction }); setMenuColumn(null) }}
+                        onFilter={(value) => onChangeFilters({ columnFilters: { ...filters.columnFilters, [key]: value } })}
+                        onClose={() => setMenuColumn(null)}
                       />
                     )}
-                  </div>
+                  </th>
                 )
               })}
+              <th scope="col" className="sticky left-0 z-10 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-xs font-bold text-navy-700 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200">
+                פעולות
+              </th>
+            </tr>
+          </thead>
 
-              {loading ? (
-                <div className="col-span-full p-4 text-center text-sm text-gray-500 dark:text-gray-400">טוען...</div>
-              ) : filteredForms.length === 0 ? (
-                <div className="col-span-full p-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                  <div className="flex flex-col items-center gap-3">
-                    <FileText size={22} className="text-gray-400" />
-                    <span>אין טפסים להצגה</span>
-                  </div>
-                </div>
-              ) : (
-                filteredForms.map((form) => (
-                  <div key={form.id} className="contents">
-                    {columns.map((column) => (
-                      <div
-                        key={`${form.id}-${column.key}`}
-                        className={`border-l border-slate-100 p-3 text-right align-top last:border-l-0 dark:border-slate-800 ${column.key === 'actions' ? 'flex items-center justify-center' : ''}`}
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={columns.length + 1} className="p-8 text-center text-gray-500"><Loader2 className="mx-auto animate-spin" size={20} /></td></tr>
+            ) : forms.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + 1} className="p-10 text-center text-gray-500 dark:text-gray-400">
+                  <FileText size={24} className="mx-auto mb-2 text-gray-400" />
+                  אין טפסים להצגה
+                </td>
+              </tr>
+            ) : (
+              forms.map((form) => {
+                const groups = groupFieldsByName(form.fields)
+                return (
+                  <tr key={form.id} className="group">
+                    {columns.map((key, index) => (
+                      <td
+                        key={key}
+                        className={`border-b border-slate-100 px-3 py-2.5 align-top text-gray-700 group-hover:bg-slate-50 dark:border-slate-800 dark:text-gray-200 dark:group-hover:bg-slate-800/60 ${index === 0 ? 'sticky right-0 z-[5] bg-white dark:bg-slate-900' : ''}`}
                       >
-                        {renderCell(form, column.key)}
-                      </div>
+                        {renderCell(form, key, groups)}
+                      </td>
                     ))}
-                  </div>
-                ))
-              )}
-            </div>
+                    <td className="sticky left-0 z-[5] border-b border-slate-100 bg-white px-3 py-2.5 text-center align-top shadow-[4px_0_6px_-4px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:group-hover:bg-slate-800/60">
+                      <div className="flex justify-center gap-1">
+                        <button type="button" onClick={() => onOpenForm(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={`צפה בטופס ${form.source_file}`} title="צפייה ואימות">
+                          <Eye size={15} />
+                        </button>
+                        {form.status === 'failed' && (
+                          <button type="button" onClick={() => onRetry(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40" aria-label={`נסה שוב לעבד את ${form.source_file}`} title="נסה שוב">
+                            <RotateCcw size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+
+        {!loading && forms.length > 0 && (
+          <div ref={sentinelRef} className="flex items-center justify-center gap-3 px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+            <span>מוצגים {forms.length} מתוך {total}</span>
+            {hasMore && (
+              <button type="button" onClick={onLoadMore} disabled={loadingMore} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-gray-600 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800">
+                {loadingMore && <Loader2 size={12} className="animate-spin" />} טען עוד
+              </button>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

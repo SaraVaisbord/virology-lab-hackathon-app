@@ -1,10 +1,10 @@
 import sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from backend.ai_extractor import _load_key
+import config
 from google import genai
 
-key = _load_key()
+key = config.GEMINI_API_KEY
 client = genai.Client(api_key=key)
 
 print("Available models that support generateContent:")

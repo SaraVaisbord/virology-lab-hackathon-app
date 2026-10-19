@@ -1,31 +1,4 @@
-// Central theme tokens – all components import from here, no hardcoded values elsewhere
-
-export const colors = {
-  // Backgrounds
-  pageBg: 'bg-surface-page dark:bg-slate-950',
-  footerBg: 'bg-surface-footer dark:bg-slate-900',
-  cardBg: 'bg-white dark:bg-slate-900',
-
-  // Text
-  textPrimary: 'text-navy-800 dark:text-slate-100',
-  textSecondary: 'text-navy-700 dark:text-slate-200',
-  textMuted: 'text-gray-500 dark:text-slate-400',
-  textFaint: 'text-gray-300 dark:text-slate-600',
-
-  // Brand actions
-  actionPrimary: 'bg-teal-600 hover:bg-teal-700 text-white dark:bg-teal-500 dark:hover:bg-teal-400',
-  actionNavy: 'bg-navy-700 hover:bg-navy-800 text-white dark:bg-sky-700 dark:hover:bg-sky-600',
-
-  // Status badges
-  badgeApproved: 'text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60',
-  badgePending: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60',
-
-  // Uncertain field
-  uncertainText: 'text-pink-700 dark:text-pink-300',
-  uncertainBg: 'bg-pink-50 dark:bg-pink-950/25',
-  uncertainBorder: 'border-pink-200 dark:border-pink-800',
-  uncertainReason: 'bg-pink-50 dark:bg-pink-950/30 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800',
-}
+// Visual variants for the stats cards (StatsCards.jsx)
 
 export const cardVariants = {
   pending: {

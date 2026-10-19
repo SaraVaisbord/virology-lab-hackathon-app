@@ -1,15 +1,13 @@
+const LINKS = ['מדיניות פרטיות', 'תנאי שימוש', 'תמיכה טכנית']
+
 export default function Footer() {
   return (
-    <footer
-      className="flex-none bg-slate-50 border-t border-slate-200 dark:border-gray-800 dark:bg-slate-900 px-8 py-4"
-      dir="rtl"
-    >
-      <div className="flex items-center justify-between gap-x-8 gap-y-3 flex-wrap">
-        {/* אודות + לוגו */}
-        <div className="flex items-center gap-x-6 gap-y-2 flex-wrap">
-          <div>
+    <footer className="flex-none border-t border-slate-200 bg-slate-50 px-4 py-2 dark:border-gray-800 dark:bg-slate-900 sm:px-8 sm:py-4" dir="rtl">
+      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div className="hidden md:block">
             <p className="text-sm font-bold text-gray-600 dark:text-gray-300">אודות המערכת</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
+            <p className="mt-0.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               מערכת אימות טפסים רפואיים לחילוץ ואימות נתונים מטפסי התחייבות באמצעות OCR ובינה מלאכותית.
             </p>
           </div>
@@ -18,24 +16,16 @@ export default function Footer() {
             <img
               src="/logos/open-code.png"
               alt="קוד פתוח"
-              className="h-6 object-contain opacity-70"
-              onError={e => { e.target.style.display = 'none' }}
+              className="h-5 object-contain opacity-70 sm:h-6"
+              onError={(e) => { e.target.style.display = 'none' }}
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              האקתון קוד פתוח – בשיתוף משרד הבריאות 2026
-            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">האקתון קוד פתוח – בשיתוף משרד הבריאות 2026</p>
           </div>
         </div>
 
-        {/* קישורים + זכויות יוצרים */}
-        <div className="flex items-center gap-x-6 gap-y-2 flex-wrap">
-          {['מדיניות פרטיות', 'תנאי שימוש', 'תמיכה טכנית'].map(label => (
-            <a
-              key={label}
-              href="#"
-              className="text-xs text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-              aria-label={label}
-            >
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+          {LINKS.map((label) => (
+            <a key={label} href="#" className="hidden text-xs text-gray-500 transition-colors hover:text-teal-600 dark:text-gray-400 dark:hover:text-teal-400 sm:inline">
               {label}
             </a>
           ))}

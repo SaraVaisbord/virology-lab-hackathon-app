@@ -2,43 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from db.queries import get_form as db_get_form, list_forms_with_fields as db_list_forms_with_fields
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = BASE_DIR / "data"
+import config
 
 
-def list_forms(status: str | None, limit: int, offset: int):
-    rows = db_list_forms_with_fields(status=status, limit=limit, offset=offset)
-    return list(reversed(rows))
-
-
-def get_form(form_id: int):
-    form = db_get_form(form_id)
-    if form is None:
+def resolve_image_path(raw_path: str | None) -> Path | None:
+    """Resolve a stored (data-dir relative) image path, refusing anything outside the data directory."""
+    if not raw_path:
         return None
-    return form
-
-
-def get_form_image_path(form_id: int) -> Path | None:
-    form = db_get_form(form_id)
-    if form is None:
+    data_dir = config.DATA_DIR.resolve()
+    candidate = Path(raw_path)
+    candidate = (candidate if candidate.is_absolute() else data_dir / candidate).resolve()
+    try:
+        candidate.relative_to(data_dir)
+    except ValueError:
         return None
-
-    raw_path = form.get("image_path") or ""
-    candidates: list[Path] = []
-    if raw_path:
-        candidates.append(Path(raw_path))
-        if raw_path.startswith("/"):
-            candidates.append(Path(raw_path).resolve())
-        else:
-            candidates.append((DATA_DIR / raw_path).resolve())
-
-    for candidate in candidates:
-        try:
-            if candidate.exists() and candidate.is_file() and str(candidate.resolve()).startswith(str(DATA_DIR.resolve())):
-                return candidate.resolve()
-        except OSError:
-            continue
-
-    return None
+    return candidate if candidate.is_file() else None

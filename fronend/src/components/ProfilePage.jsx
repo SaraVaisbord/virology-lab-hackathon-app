@@ -4,7 +4,6 @@ import {
   CheckCircle2, FileText, Bell, Globe, Moon, Sun, X, Pencil, Check
 } from 'lucide-react'
 import Toggle from './ui/Toggle'
-import StatusBadge from './ui/StatusBadge'
 
 // TODO: introduce role-based permissions and authenticated user context before enabling write operations in production.
 

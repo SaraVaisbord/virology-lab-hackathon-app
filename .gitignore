@@ -17,7 +17,6 @@ dist/
 backend/data/app.db*
 backend/data/uploads/*
 backend/data/pages_img/*
-!backend/data/**/__init__.py
 backend/results/
 backend/fiels/
 Downloads/

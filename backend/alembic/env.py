@@ -44,6 +44,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        if "sqlite" in DATABASE_URL:
+            # Batch migrations recreate tables (DROP + RENAME); with foreign keys ON, dropping `forms`
+            # would cascade-delete every extracted field. Must run outside a transaction to take effect.
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

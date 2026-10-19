@@ -1,95 +1,72 @@
 """
-barcode_reader.py - Local barcode detection from images and PDF forms.
-No data is sent to external services. No sensitive data is logged.
+barcode_reader.py - Local barcode detection (no data leaves the machine).
+
+Library use: scan_image(path) -> barcodes with coordinates normalized to the image (0..1).
+CLI use:     python barcode_reader.py path/to/file.(pdf|png|jpg)
 """
 
-import sys
+from __future__ import annotations
+
 import json
+import sys
 from pathlib import Path
+
+import pymupdf
 from PIL import Image
 from pyzbar.pyzbar import decode
-import fitz  # pymupdf
+
+import config
 
 SUPPORTED_FORMATS = {".png", ".jpg", ".jpeg", ".pdf"}
 
 
-def pdf_to_images(path: Path) -> list:
-    """Convert each PDF page to a PIL Image (in memory, no temp files)."""
-    doc = fitz.open(str(path))
-    images = []
-    for page in doc:
-        pix = page.get_pixmap(dpi=200)
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        images.append(img)
-    doc.close()
-    return images
-
-
-def load_images(image_path: str) -> list:
-    path = Path(image_path)
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {image_path}")
-    if path.suffix.lower() not in SUPPORTED_FORMATS:
-        raise ValueError(f"Unsupported format '{path.suffix}'. Supported: {SUPPORTED_FORMATS}")
-    if path.suffix.lower() == ".pdf":
-        return pdf_to_images(path)
-    try:
-        return [Image.open(path).convert("RGB")]
-    except Exception:
-        raise ValueError(f"Cannot read image file: {image_path}")
-
-
-def scan_page(image: Image.Image, page_num: int) -> list:
+def scan_pil_image(image: Image.Image) -> list[dict]:
+    width, height = image.size
     results = []
-    for bc in decode(image):
-        rect = bc.rect
+    for barcode in decode(image):
+        rect = barcode.rect
         results.append({
-            "page": page_num,
-            "data": bc.data.decode("utf-8", errors="replace"),
-            "type": bc.type,
-            "x": rect.left,
-            "y": rect.top,
-            "width": rect.width,
-            "height": rect.height,
+            "data": barcode.data.decode("utf-8", errors="replace").strip(),
+            "type": barcode.type,
+            "x": rect.left / width,
+            "y": rect.top / height,
+            "width": rect.width / width,
+            "height": rect.height / height,
         })
     return results
 
 
-def scan_file(file_path: str) -> dict:
-    images = load_images(file_path)
-    barcodes = []
-    for i, img in enumerate(images, 1):
-        barcodes.extend(scan_page(img, i))
-
-    return {
-        "file": file_path,
-        "pages": len(images),
-        "found": len(barcodes),
-        "barcodes": barcodes,
-        "message": f"Found {len(barcodes)} barcode(s)." if barcodes else "No barcodes found.",
-    }
+def scan_image(image_path: str | Path) -> list[dict]:
+    with Image.open(image_path) as image:
+        return scan_pil_image(image.convert("RGB"))
 
 
-def main():
+def _load_pages(path: Path) -> list[Image.Image]:
+    if path.suffix.lower() == ".pdf":
+        with pymupdf.open(str(path)) as doc:
+            return [
+                Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                for pix in (page.get_pixmap(dpi=config.PAGE_RENDER_DPI) for page in doc)
+            ]
+    return [Image.open(path).convert("RGB")]
+
+
+def main() -> None:
     if len(sys.argv) != 2:
         print("Usage: python barcode_reader.py path/to/file.pdf")
         sys.exit(1)
 
-    try:
-        result = scan_file(sys.argv[1])
-    except (FileNotFoundError, ValueError) as e:
-        result = {"error": str(e)}
-        print(f"Error: {e}")
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+    path = Path(sys.argv[1])
+    if not path.exists() or path.suffix.lower() not in SUPPORTED_FORMATS:
+        print(f"Error: unsupported or missing file: {path}")
         sys.exit(1)
 
-    print(result["message"])
-    for i, bc in enumerate(result["barcodes"], 1):
-        print(f"  [{i}] page={bc['page']}  type={bc['type']}  data={bc['data']}  "
-              f"pos=({bc['x']},{bc['y']})  size={bc['width']}x{bc['height']}")
-
-    print("\n--- JSON ---")
-    print(json.dumps(result, ensure_ascii=True, indent=2))
+    result = [
+        {"page": page_number, **barcode}
+        for page_number, image in enumerate(_load_pages(path), start=1)
+        for barcode in scan_pil_image(image)
+    ]
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

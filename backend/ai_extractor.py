@@ -1,157 +1,182 @@
 """
-ai_extractor.py - Send a PDF to Gemini and extract structured fields.
+ai_extractor.py - Send one page image to Gemini and get structured field candidates back.
 
-WARNING: Documents are transmitted to Google's Gemini API servers.
+WARNING: Page images are transmitted to Google's Gemini API servers.
 Review https://ai.google.dev/gemini-api/terms before processing real medical records.
 """
 
-import os
+from __future__ import annotations
+
+import io
 import json
+import logging
+import re
+import ssl
+import threading
+from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
-GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
-MODEL = "models/gemini-flash-latest"
-MAX_PAGES = 3  # MVP: limit pages to save tokens
+from PIL import Image
 
-PROMPT = """You are analyzing a scanned medical commitment form (Hebrew: טופס התחייבות רפואית).
+import config
+from db.constants import CONFIDENCE_LEVELS, FIELDS
 
-Extract every piece of structured information you can identify. Return ONLY a valid JSON object with this exact schema:
-
-{
-  "pages_analyzed": <integer>,
-  "barcodes": [
-    {
-      "value": "<string>",
-      "type_guess": "<e.g. CODE128, EAN13, unknown>",
-      "confidence": "<high|medium|low>"
-    }
-  ],
-  "commitment_numbers": [
-    { "value": "<string>", "confidence": "<high|medium|low>"}
-  ],
-  "central_numbers": [
-    { "value": "<string>", "confidence": "<high|medium|low>"}
-  ],
-  "patient_names": [
-    { "value": "<string>", "confidence": "<high|medium|low>"}
-  ],
-  "id_numbers": [
-    { "value": "<string>", "confidence": "<high|medium|low>"}
-  ],
-  "sender_organizations": [
-    { "value": "<string>", "confidence": "<high|medium|low>"}
-  ],
-  "received_dates": [
-    { "value": "<string>", "confidence": "<high|medium|low>"}
-  ],
-  "uncertain_fields": [
-    { "field": "<string>", "raw_value": "<string>", "reason": "<string>"}
-  ],
-  "notes": "<any general observations about the document>"
-}
-
-Rules:
-- Do NOT invent values. If a field is not visible, omit it from the list (empty array is fine).
-- A barcode value is NOT necessarily the same as a commitment number unless the document explicitly labels it so.
-- Include page numbers wherever you can identify them.
-- Do not include full patient names or ID numbers in the notes field.
-- Return ONLY the JSON object, no markdown, no explanation.
-"""
+logger = logging.getLogger(__name__)
+_client_lock = threading.Lock()
+_client = None
 
 
-def _load_key() -> str:
-    key = os.environ.get(GEMINI_API_KEY_ENV, "").strip()
-    if not key:
-        env_file = Path(__file__).parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text(encoding="utf-8").splitlines():
-                if line.startswith(f"{GEMINI_API_KEY_ENV}="):
-                    key = line.split("=", 1)[1].strip()
-                    break
-    if not key or key == "your-key-here":
-        raise EnvironmentError(
-            f"API key not found. Set {GEMINI_API_KEY_ENV} in your environment "
-            "or copy .env.example to .env and fill in your key."
-        )
-    return key
+class ExtractionError(RuntimeError):
+    """Raised when the model call fails or returns something unusable."""
 
 
-def extract_from_pdf(pdf_path: str) -> dict:
-    """
-    Send the PDF to Gemini and return the parsed JSON result.
-    Raises EnvironmentError if the key is missing.
-    Raises RuntimeError on API or parse errors.
-    """
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError:
-        raise ImportError("Run: pip install google-genai")
+class MissingApiKeyError(ExtractionError):
+    """GEMINI_API_KEY is not configured."""
 
-    # Fix SSL on Windows by pointing to certifi's CA bundle
-    import certifi
-    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
-    os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
-    # Workaround for CA cert key usage extension issue on Python 3.14 / Windows
-    import ssl
-    _orig_create = ssl.create_default_context
-    def _patched_create(*args, **kwargs):
-        ctx = _orig_create(*args, **kwargs)
+class QuotaExceededError(ExtractionError):
+    """Gemini rate limit / quota hit (HTTP 429). Not the form's fault — the queue should pause and retry later."""
+
+    def __init__(self, message: str, retry_after_seconds: float):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+_RETRY_IN_PATTERN = re.compile(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", re.IGNORECASE)
+
+
+def _retry_after_seconds(message: str) -> float:
+    match = _RETRY_IN_PATTERN.search(message)
+    if not match or not any(match.groups()):
+        return config.GEMINI_QUOTA_DEFAULT_BACKOFF_SECONDS
+    hours, minutes, seconds = (float(group or 0) for group in match.groups())
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    return getattr(exc, "code", None) == 429 or "RESOURCE_EXHAUSTED" in str(exc)
+
+
+def _disable_ssl_verification_once() -> None:
+    # MVP workaround for a CA-certificate issue on Python 3.14 / Windows (see config.GEMINI_INSECURE_SSL).
+    if getattr(ssl, "_gemini_patched", False):
+        return
+    original = ssl.create_default_context
+
+    def insecure_context(*args, **kwargs):
+        ctx = original(*args, **kwargs)
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
-    ssl.create_default_context = _patched_create
 
-    path = Path(pdf_path)
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {pdf_path}")
+    ssl.create_default_context = insecure_context
+    ssl._gemini_patched = True
 
-    key = _load_key()
-    client = genai.Client(api_key=key)
 
-    # Convert first MAX_PAGES to images and send as PNG (faster than PDF)
-    import pymupdf as fitz
-    from PIL import Image
-    import io
-    doc = fitz.open(str(path))
-    pages_to_send = min(MAX_PAGES, len(doc))
-    image_parts = []
-    for i in range(pages_to_send):
-        pix = doc[i].get_pixmap(dpi=100)  # low DPI to keep size small
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=70)
-        image_parts.append(
-            types.Part.from_bytes(data=buf.getvalue(), mime_type="image/jpeg")
-        )
-    doc.close()
+def _get_client():
+    global _client
+    with _client_lock:
+        if _client is None:
+            if not config.GEMINI_API_KEY or config.GEMINI_API_KEY == "your-key-here":
+                raise MissingApiKeyError("GEMINI_API_KEY is not set (backend/.env).")
+            from google import genai
+            from google.genai import types
+
+            if config.GEMINI_INSECURE_SSL:
+                _disable_ssl_verification_once()
+            _client = genai.Client(
+                api_key=config.GEMINI_API_KEY,
+                http_options=types.HttpOptions(timeout=config.GEMINI_TIMEOUT_SECONDS * 1000),
+            )
+        return _client
+
+
+@lru_cache(maxsize=1)
+def _prompt_template() -> str:
+    return config.EXTRACTION_PROMPT_FILE.read_text(encoding="utf-8")
+
+
+def build_prompt(known_senders: list[str]) -> str:
+    senders = "\n".join(f"- {name}" for name in known_senders) or "- (none)"
+    return _prompt_template().replace("{{known_senders}}", senders)
+
+
+def _image_as_jpeg(image_path: Path) -> bytes:
+    with Image.open(image_path) as image:
+        image = image.convert("RGB")
+        image.thumbnail((config.GEMINI_IMAGE_MAX_SIDE_PX, config.GEMINI_IMAGE_MAX_SIDE_PX))
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=config.GEMINI_IMAGE_JPEG_QUALITY)
+        return buffer.getvalue()
+
+
+@lru_cache(maxsize=1)
+def response_schema() -> dict[str, Any]:
+    """Structured-output schema, generated from the field list so the model can only return valid JSON with our keys."""
+    candidate = {
+        "type": "OBJECT",
+        "properties": {
+            "value": {"type": "STRING"},
+            "confidence": {"type": "STRING", "enum": sorted(CONFIDENCE_LEVELS)},
+            "box_2d": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "label": {"type": "STRING"},
+            "reason": {"type": "STRING"},
+        },
+        "required": ["value", "confidence"],
+    }
+    properties = {name: {"type": "ARRAY", "items": candidate} for name in FIELDS}
+    properties["notes"] = {"type": "STRING"}
+    return {"type": "OBJECT", "properties": properties, "required": list(FIELDS)}
+
+
+def _call_model(path: Path, known_senders: list[str]) -> dict[str, Any]:
+    from google.genai import types
 
     try:
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=image_parts + [types.Part.from_text(text=PROMPT)],
+        response = _get_client().models.generate_content(
+            model=config.GEMINI_MODEL,
+            contents=[
+                types.Part.from_bytes(data=_image_as_jpeg(path), mime_type="image/jpeg"),
+                types.Part.from_text(text=build_prompt(known_senders)),
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=response_schema(),
+                temperature=0,
+            ),
         )
-    except Exception as e:
-        raise RuntimeError(f"Gemini API error: {e}") from e
-
-    raw_text = response.text.strip()
-
-    # Strip markdown code fences if the model added them
-    if raw_text.startswith("```"):
-        lines = raw_text.splitlines()
-        raw_text = "\n".join(
-            line for line in lines if not line.startswith("```")
-        ).strip()
+    except Exception as exc:
+        if _is_quota_error(exc):
+            raise QuotaExceededError(f"Gemini quota exceeded: {exc}", _retry_after_seconds(str(exc))) from exc
+        raise ExtractionError(f"Gemini API error: {exc}") from exc
 
     try:
-        result = json.loads(raw_text)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(
-            f"Model returned non-JSON response (parse error: {e}). "
-            f"First 300 chars: {raw_text[:300]}"
-        ) from e
+        result = json.loads(response.text or "")
+    except json.JSONDecodeError as exc:
+        # Never put the response text in the message: it may contain patient data and errors are logged.
+        raise ExtractionError(f"Model returned invalid JSON ({len(response.text or '')} chars)") from None
+    if not isinstance(result, dict):
+        raise ExtractionError("Model returned JSON that is not an object.")
+    return result
 
-    result["_model"] = MODEL
-    result["_source_file"] = str(path)
+
+def extract_from_image(image_path: str | Path, known_senders: list[str] | None = None) -> dict[str, Any]:
+    """Return the model's JSON for one page. Raises ExtractionError (or one of its subclasses)."""
+    path = Path(image_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Page image not found: {path}")
+
+    for attempt in range(1, config.GEMINI_MAX_ATTEMPTS + 1):
+        try:
+            result = _call_model(path, known_senders or [])
+            break
+        except (QuotaExceededError, MissingApiKeyError):
+            raise  # retrying immediately can't help (and would burn quota)
+        except ExtractionError:
+            if attempt == config.GEMINI_MAX_ATTEMPTS:
+                raise
+            logger.warning("Gemini attempt %d/%d failed for %s, retrying", attempt, config.GEMINI_MAX_ATTEMPTS, path.name)
+
+    result["_model"] = config.GEMINI_MODEL
     return result

@@ -1,4 +1,4 @@
-from backend.validators import israeli_id_is_valid, parse_iso_like_date
+from validators import israeli_id_is_valid, parse_iso_like_date
 
 
 def test_israeli_id_valid():

@@ -59,10 +59,14 @@ export default {
       animation: {
         'fade-in':  'fadeIn 0.2s ease-out',
         'slide-up': 'slideUp 0.25s ease-out',
+        'progress-flow': 'progressFlow 2s linear infinite',
+        'shimmer': 'shimmer 1.6s ease-in-out infinite',
       },
       keyframes: {
         fadeIn:  { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
         slideUp: { '0%': { opacity: '0', transform: 'translateY(16px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        progressFlow: { '0%': { backgroundPosition: '0% 0' }, '100%': { backgroundPosition: '200% 0' } },
+        shimmer: { '0%, 100%': { opacity: '0.45' }, '50%': { opacity: '1' } },
       },
     },
   },

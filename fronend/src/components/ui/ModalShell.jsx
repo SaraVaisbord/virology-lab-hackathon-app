@@ -67,22 +67,22 @@ export default function ModalShell({ title, icon: Icon, onClose, children, foote
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40 dark:bg-black/60 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 animate-fade-in dark:bg-black/60 sm:items-center sm:p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
         ref={modalRef}
-        className={`flex max-h-[calc(100vh-48px)] flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full ${maxWidth} animate-slide-up`}
+        className={`flex max-h-[100dvh] w-full flex-col rounded-t-2xl bg-white shadow-2xl animate-slide-up dark:bg-gray-900 sm:max-h-[calc(100dvh-48px)] sm:rounded-2xl ${maxWidth}`}
         dir="rtl"
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between px-[30px] py-6 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-2.5">
-            {Icon && <Icon size={22} className="text-pink-500" />}
-            <h2 className="text-lg font-bold text-navy-800 dark:text-gray-100">{title}</h2>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-4 dark:border-gray-800 sm:px-[30px] sm:py-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {Icon && <Icon size={22} className="shrink-0 text-pink-500" />}
+            <h2 dir="auto" className="truncate text-lg font-bold text-navy-800 dark:text-gray-100">{title}</h2>
           </div>
           <button
             type="button"
@@ -95,11 +95,11 @@ export default function ModalShell({ title, icon: Icon, onClose, children, foote
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-[30px] py-[26px] space-y-5">{children}</div>
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:space-y-5 sm:px-[30px] sm:py-[26px]">{children}</div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex shrink-0 items-center justify-end gap-4 px-[30px] py-5 border-t border-gray-100 dark:border-gray-800">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-gray-100 px-4 py-4 dark:border-gray-800 sm:gap-4 sm:px-[30px] sm:py-5">
             {footer}
           </div>
         )}

@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
-
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, UploadFile
 
 from schemas.upload import UploadItemResponse
+from services.extraction_queue import extraction_queue
 from services.upload_service import process_upload
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 
 @router.post("", response_model=list[UploadItemResponse])
-async def upload_files(files: list[UploadFile] = File(..., description="One or more files")) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for file in files:
-        results.append(process_upload(file))
+def upload_files(files: list[UploadFile] = File(..., description="One or more files")):
+    results = [process_upload(file) for file in files]
+    if any(result["status"] == "created" for result in results):
+        extraction_queue.notify()
     return results
