@@ -33,6 +33,32 @@ FIELD_LABEL_KEYWORDS = {
     "id_number": ('ת"ז', "ת.ז", "מ.ז", "זהות"),
 }
 
+# Label lexicon for the local (OCR) extractor. A printed line is a label for a field when it contains one of
+# `keywords` and none of `exclude_if_line_has` (e.g. the title "טופס התחייבות" is not a commitment-number label).
+# `requires_one_of`: at least one of these words must be on the line too (e.g. "מספר התחייבות", not just "התחייבות").
+LOCAL_LABEL_LEXICON = {
+    "commitment_number": {
+        "keywords": ("התחייבות", "ההתחייבות"),
+        # "מספר התחייבות", or a form title "טופס התחייבות ... מס' 58153" — both carry a number word.
+        "requires_one_of": ("מספר", "מס'", "מס", "מס׳"),
+        # ...but not instructions such as "נא לציין את מספר ההתחייבות" or payment notes.
+        "exclude_if_line_has": ("לציין", "תשלום", "לתשלום"),
+    },
+    "central_number": {"keywords": ("מקרה", "מרכזי"), "requires_one_of": (), "exclude_if_line_has": ()},
+    "id_number": {"keywords": ('ת"ז', "ת.ז", "מ.ז", "זהות"), "requires_one_of": (), "exclude_if_line_has": ()},
+    "received_date": {
+        # A page has many dates; "ת.קבלה" / "קבלה" / "התקבל" (strong) say "received", plain "תאריך" (weak) doesn't.
+        "keywords": ("תאריך", "התקבל", "קבלה", "ת.קבלה"),
+        "strong_keywords": ("התקבל", "קבלה", "ת.קבלה"),
+        "requires_one_of": (),
+        "exclude_if_line_has": ("לידה", "שחרור", "הדגימה", "לשחרור"),
+    },
+}
+# Hebrew one-letter prefixes (the/and/in/to/from/that/as) that may be glued to a label word: "ההתחייבות", "מתאריך".
+HEBREW_PREFIXES = ("ה", "ו", "ב", "ל", "מ", "ש", "כ")
+# Numbers on a line with one of these words are never form values (catalog no., phone, fax, zip, birth date).
+LOCAL_NEGATIVE_LABELS = ('מק"ט', "מק״ט", "טל", "טל'", "טלפון", "פקס", "מיקוד", "לידה", "ח.לידה", "ת.ד")
+
 FORM_STATUS_LABELS = {
     "uploaded": "בתור לעיבוד",
     "processing": "בעיבוד",
@@ -117,13 +143,14 @@ EXTRACTION_ERRORS = {
     "timeout": "Gemini לא הגיב בזמן – אפשר לנסות שוב",
     "model": "שגיאה בקבלת תשובה מ-Gemini – אפשר לנסות שוב",
     "config": "מפתח Gemini לא הוגדר בשרת",
-    "quota": "מכסת Gemini נוצלה – הטופס הוחזר לתור",
+    "quota": "Gemini לא זמין כרגע (מכסה או עומס) – הטופס הוחזר לתור",
     "barcode": "סריקת הברקודים נכשלה",
     "unexpected": "שגיאה לא צפויה בעיבוד הטופס",
 }
 
 QUEUE_PAUSE_REASON_LABELS = {
-    "quota": "מכסת הבקשות ל-Gemini נוצלה – העיבוד יתחדש אוטומטית",
+    "quota": "מכסת הבקשות ל-Gemini נוצלה בכל המפתחות – העיבוד יתחדש אוטומטית",
+    "busy": "כל המודלים של Gemini עמוסים כרגע – ניסיון חוזר אוטומטי בקרוב",
     "disabled": "החילוץ האוטומטי מושבת בשרת (WORKER_ENABLED=false) – טפסים חדשים ממתינים בתור",
 }
 

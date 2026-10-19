@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-import importlib
-import io
-from pathlib import Path
+import os
+
+# Must run before config is imported: tests never load backend/.env (real API keys stay out of tests and output).
+os.environ["APP_ENV"] = "test"
+for _name in [n for n in os.environ if n.startswith(("GEMINI_API_KEY", "OPENAI_API_KEY", "OPEN_AI_API_KEY"))]:
+    del os.environ[_name]
+
+import importlib  # noqa: E402
+import io  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 import pytest
 from alembic import command

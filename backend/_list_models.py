@@ -4,7 +4,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import config
 from google import genai
 
-key = config.GEMINI_API_KEY
+key = config.GEMINI_API_KEYS[0]  # lists models visible to the first key
 client = genai.Client(api_key=key)
 
 print("Available models that support generateContent:")

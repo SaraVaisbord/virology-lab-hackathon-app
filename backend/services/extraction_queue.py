@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timezone
 
 import config
-from ai_extractor import QuotaExceededError
+from ai_extractor import ModelsUnavailableError
 from db import queries
 from services.extraction_service import extract_for_form, user_facing_error
 
@@ -94,10 +94,10 @@ class ExtractionQueue:
         try:
             extract_for_form(form)
             logger.info("Form %s extracted", form["id"])
-        except QuotaExceededError as exc:
-            logger.warning("Gemini quota exceeded — pausing queue for %.0fs", exc.retry_after_seconds)
+        except ModelsUnavailableError as exc:
+            logger.warning("All Gemini routes resting (%s) — pausing queue for %.0fs", exc.reason, exc.retry_after_seconds)
             queries.return_to_queue(form["id"])
-            self.pause(exc.retry_after_seconds, "quota")
+            self.pause(exc.retry_after_seconds, exc.reason)
         except Exception as exc:
             logger.exception("Extraction failed for form %s", form["id"])
             queries.set_form_status(form["id"], "failed", error=user_facing_error(exc))

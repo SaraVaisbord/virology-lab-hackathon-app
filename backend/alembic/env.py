@@ -11,7 +11,8 @@ from db.session import DATABASE_URL
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Don't silence loggers that already exist (e.g. when migrations run inside the test process).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 

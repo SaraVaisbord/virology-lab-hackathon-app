@@ -275,7 +275,7 @@ def user_facing_error(exc: Exception) -> str:
     """Short Hebrew message for the UI; technical details are logged, never shown or stored."""
     if isinstance(exc, ai_extractor.MissingApiKeyError):
         return EXTRACTION_ERRORS["config"]
-    if isinstance(exc, ai_extractor.QuotaExceededError):
+    if isinstance(exc, ai_extractor.ModelsUnavailableError):
         return EXTRACTION_ERRORS["quota"]
     if isinstance(exc, ai_extractor.ExtractionError):
         return EXTRACTION_ERRORS["timeout" if "timed out" in str(exc).lower() else "model"]
@@ -300,9 +300,26 @@ def run_ocr(image_path, page: int | None) -> dict[str, Any]:
     return {"status": "unavailable", "reason": OCR_UNAVAILABLE_REASON, "items": []}
 
 
-def extract_for_form(form: dict[str, Any]) -> None:
+def _llm_module(provider: str):
+    """LLM providers share one interface: extract_from_image(image_path, known_senders) -> dict in the same shape.
+    Looked up at call time (not cached) so tests can monkeypatch the providers."""
+    if provider == "gemini":
+        return ai_extractor
+    if provider == "openai":
+        import openai_extractor
+
+        return openai_extractor
+    raise ValueError(f"Unknown LLM provider: {provider!r}")
+
+
+LLM_PROVIDERS = ("gemini", "openai")
+
+
+def extract_for_form(form: dict[str, Any], provider: str = "gemini") -> None:
     """Run all sources for one page, persist each result separately, then build the field rows.
-    Raises on LLM failure (the queue marks the form failed / re-queues it) — barcode/OCR results are already saved."""
+    Raises on LLM failure (the queue marks the form failed / re-queues it) — barcode/OCR results are already saved.
+    The queue always uses Gemini; provider="openai" is used for one-off runs (see __main__)."""
+    llm = _llm_module(provider)
     form_id, page = form["id"], form.get("page_number")
     image_path = resolve_image_path(form.get("image_path"))
     if image_path is None:
@@ -315,7 +332,7 @@ def extract_for_form(form: dict[str, Any]) -> None:
 
     known_senders = [name for name, _kind in queries.list_senders()]
     try:
-        llm_result = ai_extractor.extract_from_image(image_path, known_senders)
+        llm_result = llm.extract_from_image(image_path, known_senders)
     except Exception as exc:
         queries.save_source_results(form_id, source_errors={**errors, "llm": user_facing_error(exc)})
         raise
@@ -339,12 +356,37 @@ def reverify_form(form_id: int) -> bool:
     return True
 
 
+def extract_one(form_id: int, provider: str) -> str:
+    """One-off extraction of a single form outside the queue (e.g. with OpenAI). Returns the final form status."""
+    form = queries.get_form(form_id)
+    if form is None:
+        raise ValueError(f"Form {form_id} not found")
+    queries.set_form_status(form_id, "processing")
+    try:
+        extract_for_form(form, provider=provider)
+    except Exception as exc:
+        logger.exception("One-off extraction failed for form %s", form_id)
+        queries.set_form_status(form_id, "failed", error=user_facing_error(exc))
+    return queries.get_form(form_id)["status"]
+
+
 if __name__ == "__main__":
-    # python -m services.extraction_service  → re-verify every form that already has an LLM result
+    # python -m services.extraction_service                          → re-verify every form (no LLM calls)
+    # python -m services.extraction_service --form 2 --provider openai → extract one form now with that provider
+    import argparse
     import sys
 
     from db.queries import FormFilters, list_forms
 
-    rows, _ = list_forms(FormFilters(), limit=config.EXPORT_MAX_ROWS)
-    done = sum(reverify_form(row["id"]) for row in rows)
-    print(f"Re-verified {done} of {len(rows)} forms.", file=sys.stderr)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--form", type=int)
+    parser.add_argument("--provider", choices=LLM_PROVIDERS, default="gemini")
+    cli = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
+
+    if cli.form is not None:
+        print(f"Form {cli.form} via {cli.provider}: {extract_one(cli.form, cli.provider)}", file=sys.stderr)
+    else:
+        rows, _ = list_forms(FormFilters(), limit=config.EXPORT_MAX_ROWS)
+        done = sum(reverify_form(row["id"]) for row in rows)
+        print(f"Re-verified {done} of {len(rows)} forms.", file=sys.stderr)

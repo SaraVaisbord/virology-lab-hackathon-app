@@ -8,9 +8,11 @@ python-dotenv>=1.0.0
 SQLAlchemy>=2.0.0
 alembic>=1.13.0
 
-# Documents & extraction
+# Documents & extraction (OCR also needs the Tesseract binary + heb/eng/osd traineddata, see config.py)
 pymupdf>=1.24.0
 Pillow>=10.0.0
+opencv-python-headless>=4.10.0
+numpy>=1.26.0
 pyzbar>=0.1.9
 google-genai>=1.0.0
 openpyxl>=3.1.0

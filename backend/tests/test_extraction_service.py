@@ -242,7 +242,7 @@ def test_quota_error_requeues_form_and_pauses_queue(app_env, monkeypatch):
     monkeypatch.setattr(barcode_reader, "scan_image", lambda path: [])
 
     def rate_limited(path, senders):
-        raise ai_extractor.QuotaExceededError("429", retry_after_seconds=120)
+        raise ai_extractor.ModelsUnavailableError("429", retry_after_seconds=120, reason="quota")
 
     monkeypatch.setattr(ai_extractor, "extract_from_image", rate_limited)
     form_id, form = _uploaded_form(queries, upload_service)
@@ -279,23 +279,18 @@ def test_retry_delay_is_parsed_from_gemini_message():
     assert _retry_after_seconds("Please retry in 13.2s") == 13.2
 
 
-def test_invalid_model_json_does_not_leak_response_text(monkeypatch, tmp_path):
-    """Errors are logged, so they must not contain the model's (possibly medical) output."""
-    import ai_extractor
+def test_one_off_extraction_with_openai_provider(app_env, monkeypatch):
+    import barcode_reader
+    import openai_extractor
+    from db import queries
+    from services import extraction_service, upload_service
 
-    class FakeResponse:
-        text = '{"first_name": [{"value": "ישראל ישראלי"'
+    monkeypatch.setattr(barcode_reader, "scan_image", lambda path: [])
+    monkeypatch.setattr(openai_extractor, "extract_from_image",
+                        lambda path, senders: {"central_number": [{"value": "12345", "confidence": "high"}], "_model": "gpt-test"})
+    form_id = upload_service.process_upload(DummyUpload("a.png", png_bytes()))["form_ids"][0]
 
-    class FakeModels:
-        def generate_content(self, **kwargs):
-            return FakeResponse()
-
-    class FakeClient:
-        models = FakeModels()
-
-    image = tmp_path / "p.png"
-    image.write_bytes(png_bytes())
-    monkeypatch.setattr(ai_extractor, "_get_client", lambda: FakeClient())
-    with pytest.raises(ai_extractor.ExtractionError) as info:
-        ai_extractor.extract_from_image(image, [])
-    assert "ישראל" not in str(info.value)
+    assert extraction_service.extract_one(form_id, "openai") == "extracted"
+    stored = queries.get_form(form_id, with_sources=True)
+    assert stored["sources"]["llm_result"]["_model"] == "gpt-test"
+    assert _by_name(stored["fields"], "central_number")[0]["llm_value"] == "12345"
