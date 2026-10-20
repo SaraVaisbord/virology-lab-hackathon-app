@@ -3,6 +3,8 @@ import { Barcode, Bot, CheckCircle2, Loader2, ScanText } from 'lucide-react'
 import StatusBadge from '../ui/StatusBadge'
 import { useMeta } from '../../meta/MetaContext'
 import { EMPTY, fieldDisplayValue } from '../../lib/format'
+import { digitsOf, fieldsUsing } from '../../lib/pageNumbers'
+import PageNumberRow from './PageNumberRow'
 
 const AGREEMENT_STYLES = {
   agree: 'border-teal-200 bg-teal-50 text-teal-800 dark:border-teal-900 dark:bg-teal-950/30 dark:text-teal-200',
@@ -130,7 +132,7 @@ function SourceEvidence({ field, sources, onUse }) {
   )
 }
 
-export default function FieldEditor({ field, sources, onApprove, saving, error }) {
+export default function FieldEditor({ field, sources, numbers, fields, focusKey, onShow, onApprove, saving, error }) {
   const meta = useMeta()
   const [draft, setDraft] = useState('')
   const inputRef = useRef(null)
@@ -145,6 +147,13 @@ export default function FieldEditor({ field, sources, onApprove, saving, error }
     setDraft(value)
     inputRef.current?.focus()
   }
+
+  // Other numbers on the page — the value the worker needs is often one the field didn't get.
+  const ownKeys = new Set([field.value, field.llm_value, field.ocr_value, field.barcode_value].filter(Boolean).map(digitsOf))
+  const otherNumbers = (numbers ?? [])
+    .filter((item) => !ownKeys.has(item.key))
+    .map((item) => ({ item, usedBy: fieldsUsing(fields ?? [], item.key) }))
+    .sort((a, b) => (a.usedBy.length > 0) - (b.usedBy.length > 0))
 
   const submit = (event) => {
     event.preventDefault()
@@ -165,6 +174,17 @@ export default function FieldEditor({ field, sources, onApprove, saving, error }
       )}
 
       <SourceEvidence field={field} sources={sources} onUse={useValue} />
+
+      {meta.isNumeric(field.field_name) && otherNumbers.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+          <p className="mb-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">אפשרויות נוספות שנמצאו בעמוד</p>
+          <ul className="space-y-1.5">
+            {otherNumbers.map(({ item, usedBy }) => (
+              <PageNumberRow key={item.key} item={item} usedBy={usedBy} focused={item.key === focusKey} onShow={onShow} onUse={useValue} />
+            ))}
+          </ul>
+        </div>
+      )}
 
       <label className="block">
         <span className="mb-1.5 block text-sm font-semibold text-gray-900 dark:text-gray-100">ערך מאושר</span>

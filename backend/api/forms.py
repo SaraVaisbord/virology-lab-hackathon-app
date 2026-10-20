@@ -109,7 +109,10 @@ def confirm_field(form_id: int, field_id: int, payload: ConfirmFieldRequest):
 def add_field(form_id: int, payload: AddFieldRequest):
     """A value typed by the lab worker — works whether or not the form was (or could be) extracted."""
     try:
-        return queries.add_manual_field(form_id, payload.field_name, payload.value)
+        return queries.add_manual_field(
+            form_id, payload.field_name, payload.value, replace=payload.replace,
+            box=payload.box.model_dump() if payload.box else None, picked_from=payload.picked_from,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

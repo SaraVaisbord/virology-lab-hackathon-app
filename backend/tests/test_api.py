@@ -147,3 +147,25 @@ def test_manual_value_replaces_not_found_and_completes_a_failed_form(client):
     ids = [f for f in body["fields"] if f["field_name"] == "id_number"]
     assert [(f["value"], f["status"]) for f in ids] == [("000000018", "confirmed")]
     assert body["status"] == "approved"
+
+
+def test_pick_a_page_number_into_a_field_keeps_its_location(client):
+    from db import queries
+
+    form_id = make_form(queries)
+    queries.save_extraction(form_id, [{"field_name": "id_number", "value": "1", "llm_value": "1", "status": "uncertain"}])
+    box = {"x": 0.1, "y": 0.2, "width": 0.05, "height": 0.02}
+
+    picked = client.post(f"/forms/{form_id}/fields", json={
+        "field_name": "commitment_number", "value": "947768", "box": box, "picked_from": "barcode"}).json()
+    row = next(f for f in picked["fields"] if f["field_name"] == "commitment_number")
+    assert (row["value"], row["status"], row["box_source"], row["x"]) == ("947768", "confirmed", "barcode", 0.1)
+    assert row["evidence"] == {"manual": True, "picked_from": "barcode"}
+
+    # single-value field: picking replaces the old value only when asked to
+    assert client.post(f"/forms/{form_id}/fields", json={"field_name": "id_number", "value": "000000018"}).status_code == 400
+    replaced = client.post(f"/forms/{form_id}/fields", json={
+        "field_name": "id_number", "value": "000000018", "replace": True, "box": box, "picked_from": "ocr"}).json()
+    ids = [f for f in replaced["fields"] if f["field_name"] == "id_number"]
+    assert [(f["value"], f["box_source"]) for f in ids] == [("000000018", "ocr")]
+    assert client.post(f"/forms/{form_id}/fields", json={"field_name": "sender", "value": "x", "picked_from": "nope"}).status_code == 400

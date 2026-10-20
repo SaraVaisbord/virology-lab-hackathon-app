@@ -18,6 +18,7 @@ from .constants import (
     PENDING_FORM_STATUSES,
     REVIEW_FIELD_STATUSES,
     SENDER_KINDS,
+    SOURCE_LABELS,
 )
 from .models import ExtractedField, Form, Sender
 from .session import SessionLocal
@@ -226,26 +227,42 @@ def save_extraction(form_id: int, fields: list[dict[str, Any]], form_type: str |
         _recalculate_form_status(session, form)
 
 
-def add_manual_field(form_id: int, field_name: str, value: str) -> dict[str, Any]:
-    """A value typed by the lab worker (no extraction needed). It counts as confirmed and survives re-extraction.
-    Single-value fields get it only when they have no value yet — an existing value is edited, not duplicated."""
+def add_manual_field(
+    form_id: int,
+    field_name: str,
+    value: str,
+    *,
+    replace: bool = False,
+    box: dict[str, float] | None = None,
+    picked_from: str | None = None,
+) -> dict[str, Any]:
+    """A value set by the lab worker — typed, or picked from a number a source found on the page (then `box` is
+    where it is and `picked_from` which source read it, so the page highlight keeps working). It counts as
+    confirmed and survives re-extraction. A single-value field takes it only when empty, unless `replace`."""
     _require_in(field_name, FIELDS, "field_name")
     value = (value or "").strip()
     if not value:
         raise ValueError("Value cannot be empty.")
+    if picked_from is not None:
+        _require_in(picked_from, SOURCE_LABELS, "source")
     with SessionLocal() as session, session.begin():
         form = session.get(Form, form_id, options=[selectinload(Form.extracted_fields)])
         if form is None:
             raise LookupError(f"Form {form_id} not found.")
         existing = [row for row in form.extracted_fields if row.field_name == field_name]
-        if field_name not in MULTI_VALUE_FIELDS and any(row.status != "not_found" for row in existing):
+        has_value = any(row.status != "not_found" for row in existing)
+        if field_name not in MULTI_VALUE_FIELDS and has_value and not replace:
             raise ValueError(f"{field_name} already has a value — edit it instead.")
         for row in existing:
-            if row.status == "not_found":  # the placeholder "not found" row is replaced by the real value
+            # The "not found" placeholder always goes; a single-value field's old value goes when replaced.
+            if row.status == "not_found" or (replace and field_name not in MULTI_VALUE_FIELDS):
                 form.extracted_fields.remove(row)
+        coordinates = {key: float(box[key]) for key in ("x", "y", "width", "height")} if box else {}
         form.extracted_fields.append(ExtractedField(
             field_name=field_name, value=value, corrected_value=value, status="confirmed",
-            evidence=_to_json({"manual": True}),
+            evidence=_to_json({"manual": True, **({"picked_from": picked_from} if picked_from else {})}),
+            box_source=picked_from if box else None,
+            **coordinates,
         ))
         session.flush()
         _recalculate_form_status(session, form, keep_pending=True)

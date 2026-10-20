@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FileSearch, Loader2, RotateCcw } from 'lucide-react'
 import ModalShell from '../ui/ModalShell'
 import StatusBadge from '../ui/StatusBadge'
@@ -9,6 +9,7 @@ import PageSources from './PageSources'
 import { api } from '../../api'
 import { useMeta } from '../../meta/MetaContext'
 import { fieldDisplayValue, formatDateTime } from '../../lib/format'
+import { pageNumbers } from '../../lib/pageNumbers'
 
 /** Next field that still needs a decision, searching forward from the current one (wrapping around). */
 function nextFieldToReview(fields, currentId, needsReview) {
@@ -48,6 +49,18 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
   const addField = (fieldName, value) => applyEdit(() => api.addField(form.id, fieldName, value))
   const deleteField = (fieldId) => applyEdit(() => api.deleteField(form.id, fieldId))
 
+  // Numbers found on the page (all sources merged) — can be shown on the document and picked into a field.
+  const numbers = useMemo(() => pageNumbers(form.sources), [form.sources])
+  const [focus, setFocus] = useState(null)
+  const assignNumber = (fieldName, item) => {
+    const hasValue = (form.fields ?? []).some((field) => field.field_name === fieldName && field.status !== 'not_found')
+    return applyEdit(() => api.addField(form.id, fieldName, item.value, {
+      replace: hasValue && !meta.isMultiValue(fieldName), // a single-value field takes the picked value instead
+      box: item.box,
+      picked_from: item.box ? item.boxSource : item.sources[0],
+    }))
+  }
+
   useEffect(() => {
     let cancelled = false
     api.getForm(initialForm.id)
@@ -68,6 +81,7 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
   const selectField = (id) => {
     setActiveFieldId(id)
     setSaveError('')
+    setFocus(null)
   }
 
   const approve = async (value) => {
@@ -120,12 +134,16 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
               <Loader2 size={16} className="animate-spin" /> הטופס עדיין בעיבוד – אפשר כבר להזין ערכים ידנית ברשימה למטה.
             </div>
           ) : (
-            activeField && !editMode && <FieldEditor field={activeField} sources={form.sources} onApprove={approve} saving={saving} error={saveError} />
+            activeField && !editMode && (
+              <FieldEditor field={activeField} sources={form.sources} numbers={numbers} fields={fields} focusKey={focus?.key}
+                onShow={setFocus} onApprove={approve} saving={saving} error={saveError} />
+            )
           )}
         </div>
 
         <div className="order-3 h-[60vh] lg:sticky lg:top-0 lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-[calc(100dvh-14rem)]">
-          <DocumentViewer imageUrl={api.getFormImageUrl(form.id)} field={activeField} alt={`עמוד ${form.page_number} של ${form.source_file}`} />
+          <DocumentViewer imageUrl={api.getFormImageUrl(form.id)} field={activeField} focus={focus} onClearFocus={() => setFocus(null)}
+            alt={`עמוד ${form.page_number} של ${form.source_file}`} />
         </div>
 
         {!loading && (
@@ -140,7 +158,8 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
               saving={listSaving}
               error={listError}
             />
-            <PageSources sources={form.sources} fields={fields} onSelectField={selectField} />
+            <PageSources sources={form.sources} fields={fields} numbers={numbers} focusKey={focus?.key}
+              onShow={setFocus} onAssign={assignNumber} saving={listSaving} />
           </div>
         )}
       </div>

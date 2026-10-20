@@ -7,6 +7,7 @@ from fastapi import APIRouter
 import config
 from db.constants import (
     AGREEMENT_LABELS,
+    BARCODE_FIELDS,
     BARCODE_MATCH_LABELS,
     CONFIDENCE_LABELS,
     EXPORT_MODE_LABELS,
@@ -30,7 +31,8 @@ router = APIRouter(prefix="/meta", tags=["meta"])
 def get_meta():
     return {
         "fields": [
-            {"key": key, "label": label, "multi_value": key in MULTI_VALUE_FIELDS}
+            # numeric: values are digit strings, so numbers found on the page are offered as options for them
+            {"key": key, "label": label, "multi_value": key in MULTI_VALUE_FIELDS, "numeric": key in BARCODE_FIELDS}
             for key, label in FIELD_LABELS.items()
         ],
         "form_columns": FORM_COLUMN_LABELS,

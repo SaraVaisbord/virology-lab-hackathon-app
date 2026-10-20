@@ -81,6 +81,17 @@ class ConfirmFieldRequest(BaseModel):
     corrected_value: str | None = None
 
 
+class BoxPayload(BaseModel):
+    x: float
+    y: float
+    width: float
+    height: float
+
+
 class AddFieldRequest(BaseModel):
     field_name: str
     value: str
+    # Set when the value was picked from a number a source found on the page (keeps its location for the UI).
+    replace: bool = False
+    box: BoxPayload | None = None
+    picked_from: str | None = None

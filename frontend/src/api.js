@@ -54,8 +54,9 @@ export const api = {
   confirmField: (formId, fieldId, correctedValue) =>
     request(`/forms/${formId}/fields/${fieldId}/confirm`, { method: 'PATCH', json: { corrected_value: correctedValue } }),
 
-  addField: (formId, fieldName, value) =>
-    request(`/forms/${formId}/fields`, { method: 'POST', json: { field_name: fieldName, value } }),
+  /** options: { replace, box, picked_from } when the value is picked from a number found on the page. */
+  addField: (formId, fieldName, value, options = {}) =>
+    request(`/forms/${formId}/fields`, { method: 'POST', json: { field_name: fieldName, value, ...options } }),
 
   deleteField: (formId, fieldId) => request(`/forms/${formId}/fields/${fieldId}`, { method: 'DELETE' }),
 
