@@ -114,8 +114,11 @@ def _line_masks(ink: np.ndarray, ratio: float) -> tuple[np.ndarray, np.ndarray]:
 def estimate_skew(ink: np.ndarray, settings: PreprocessSettings) -> float:
     """Skew angle (degrees) from the form's long horizontal lines — forms have plenty of them."""
     horizontal, _ = _line_masks(ink, settings.line_min_length_ratio)
-    segments = cv2.HoughLinesP(horizontal, 1, np.pi / 1800, threshold=100,
-                               minLineLength=int(ink.shape[1] * 0.1), maxLineGap=10)
+    # 0.25° angular steps (finer steps cost a lot of time for no practical gain); the vote threshold scales with
+    # the image width so the same lines are found at any resolution.
+    min_length = int(ink.shape[1] * 0.1)
+    segments = cv2.HoughLinesP(horizontal, 1, np.pi / 720, threshold=max(30, min_length // 2),
+                               minLineLength=min_length, maxLineGap=10)
     if segments is None:
         return 0.0
     # OpenCV 4 returns (N, 1, 4), OpenCV 5 returns (N, 4).
@@ -187,14 +190,23 @@ def _ink_mask(gray: np.ndarray, settings: PreprocessSettings) -> np.ndarray:
     return cv2.bitwise_not(sauvola(flat, settings.sauvola_window, settings.sauvola_k))
 
 
+def straighten(bgr: np.ndarray, settings: PreprocessSettings = DEFAULT_SETTINGS) -> tuple[np.ndarray, int, float]:
+    """Upright (90/180/270 via OSD) and deskewed page. Used at upload, so the page shown to the lab worker is
+    straight even before extraction runs. Returns (image, rotation degrees, skew degrees)."""
+    image, rotation = fix_orientation(bgr, settings)
+    # The skew angle doesn't need full resolution: measure it on a half-size copy (4x fewer pixels).
+    small = cv2.resize(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+    skew = estimate_skew(_ink_mask(small, settings), settings)
+    return rotate(image, skew, (255, 255, 255)), rotation, skew
+
+
 def preprocess(bgr: np.ndarray, source_dpi: float | None = None, settings: PreprocessSettings = DEFAULT_SETTINGS) -> PageViews:
     """Turn one scanned page (BGR) into the per-consumer views described in the module docstring."""
     image = rescale_to_dpi(bgr, source_dpi or settings.target_dpi, settings.target_dpi)
 
     # 1. Fix orientation, then straighten the scan — every mask below is computed once, on the final geometry.
-    image, rotation = fix_orientation(image, settings)
-    skew = estimate_skew(_ink_mask(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), settings), settings)
-    image = rotate(image, skew, (255, 255, 255))
+    #    (Pages are already straightened at upload; this is a cheap no-op for them and covers older uploads.)
+    image, rotation, skew = straighten(image, settings)
 
     # 2. Classify colour by hue angle in the (smoothed) a*b* plane.
     lightness, a, b = _lab_channels(image, settings.chroma_median_ksize)

@@ -79,11 +79,6 @@ const doc = new Document({
       bullet('כפתורי "אישור שדה" (teal) ו-"שמירה וסגירה" (navy)'),
       bullet('נסגרת ב-Escape, לחיצה על רקע, או כפתור X'),
 
-      h2('2.3 חלונית פרופיל משתמש (Profile Panel)'),
-      p('נפתחת מהצד הימני בלחיצה על אזור המשתמש בהדר.'),
-      bullet('טאב "פרטים אישיים" – 6 שדות הניתנים לעריכה inline'),
-      bullet('טאב "היסטוריה" – לוג פעולות אחרונות עם סטטוס'),
-      bullet('טאב "הגדרות" – Dark mode, התראות, שפה, התנתקות'),
       divider(),
 
       // 3. Components
@@ -115,10 +110,6 @@ const doc = new Document({
       bullet('סיבת ספק: bg-pink-50 + text-pink-600 + border-pink-200'),
       bullet('שמירה: מעדכנת status ל-confirmed, מחשבת מחדש status הטופס'),
 
-      h2('3.5 ProfilePage – src/components/ProfilePage.jsx'),
-      bullet('עריכת שדה: Pencil icon (sky-500 hover) → input + Check/X'),
-      bullet('Enter: שמירה | Escape: ביטול | שמירה מעדכנת כותרת בזמן אמת'),
-      bullet('Toggles: w-12 h-6 rounded-full, teal כשפעיל'),
 
       h2('3.6 Footer – src/components/Footer.jsx'),
       bullet('רקע: #F0F4F3 | padding: py-6'),
@@ -133,7 +124,7 @@ const doc = new Document({
         rows: [
           th(['שם', 'Tailwind', 'HEX', 'שימוש']),
           tr('Navy 600', 'navy-600', '#1e3a6e', 'כותרות, אייקונים, כפתור שמירה'),
-          tr('Navy 700', 'navy-700', '#162d57', 'Header פרופיל, טקסט ראשי'),
+          tr('Navy 700', 'navy-700', '#162d57', 'טקסט ראשי'),
           tr('Navy 800', 'navy-800', '#0f2040', 'כותרות עמוד, מספרים'),
           tr('Sky 500', 'sky-500', '#0ea5e9', 'כרטיסיית ממתינים, hover עיפרון'),
           tr('Teal 500', 'teal-500', '#14b8a6', 'כרטיסיית דיוק, כפתורים, badge אושר'),
@@ -188,7 +179,7 @@ const doc = new Document({
 
       h2('6.4 Dark Mode'),
       bullet('מנגנון: document.documentElement.classList.toggle("dark")'),
-      bullet('הפעלה: כפתור בהדר או toggle בפרופיל → הגדרות'),
+      bullet('הפעלה: כפתור בהדר'),
       divider(),
 
       // 7. Data
@@ -204,7 +195,7 @@ const doc = new Document({
       h1('8. מבנה קבצים'),
       code('fronend/'),
       code('├── public/logos/   moh.png | sheba.svg | virus-lab.png | open-code.png'),
-      code('├── src/components/ Header | StatsCards | DataTable | ValidationModal | ProfilePage | Footer'),
+      code('├── src/components/ Header | StatsCards | DataTable | ValidationModal | Footer'),
       code('├── src/data/       mockData.js'),
       code('├── src/            App.jsx | main.jsx | index.css'),
       code('└──                 tailwind.config.js | vite.config.js | package.json'),

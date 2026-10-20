@@ -17,7 +17,7 @@ function nextFieldToReview(fields, currentId, needsReview) {
   return ordered.find(needsReview)?.id ?? currentId
 }
 
-export default function FormDetailsModal({ form: initialForm, initialFieldId, onClose, onFormUpdated, onRetry }) {
+export default function FormDetailsModal({ form: initialForm, initialFieldId, editMode = false, onClose, onFormUpdated, onRetry }) {
   const meta = useMeta()
   const [form, setForm] = useState(initialForm)
   const [loading, setLoading] = useState(true)
@@ -25,6 +25,28 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, on
   const [activeFieldId, setActiveFieldId] = useState(initialFieldId ?? null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [listSaving, setListSaving] = useState(false)
+  const [listError, setListError] = useState('')
+
+  /** Run a manual edit (edit / add / delete); returns true on success so the inline editor can close. */
+  const applyEdit = async (request) => {
+    setListSaving(true)
+    setListError('')
+    try {
+      const updated = await request()
+      setForm(updated)
+      onFormUpdated(updated)
+      return true
+    } catch (err) {
+      setListError(err.message)
+      return false
+    } finally {
+      setListSaving(false)
+    }
+  }
+  const editField = (fieldId, value) => applyEdit(() => api.confirmField(form.id, fieldId, value))
+  const addField = (fieldName, value) => applyEdit(() => api.addField(form.id, fieldName, value))
+  const deleteField = (fieldId) => applyEdit(() => api.deleteField(form.id, fieldId))
 
   useEffect(() => {
     let cancelled = false
@@ -87,27 +109,37 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, on
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{loadError}</div>
       )}
 
-      {/* Mobile order: editor → document → field list. Desktop: editor + list on one side, document on the other. */}
+      {/* Mobile order: editor → document → field list (edit mode: field list first).
+          Desktop: editor + list on one side, document on the other. */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <div className="lg:col-start-1">
+        <div className={`lg:col-start-1 ${editMode ? 'order-2 lg:order-none' : ''}`}>
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-gray-500"><Loader2 size={16} className="animate-spin" /> טוען פרטים...</div>
           ) : pending ? (
             <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-200">
-              <Loader2 size={16} className="animate-spin" /> הטופס עדיין בעיבוד – השדות יופיעו כשהחילוץ יסתיים.
+              <Loader2 size={16} className="animate-spin" /> הטופס עדיין בעיבוד – אפשר כבר להזין ערכים ידנית ברשימה למטה.
             </div>
           ) : (
-            activeField && <FieldEditor field={activeField} sources={form.sources} onApprove={approve} saving={saving} error={saveError} />
+            activeField && !editMode && <FieldEditor field={activeField} sources={form.sources} onApprove={approve} saving={saving} error={saveError} />
           )}
         </div>
 
-        <div className="h-[60vh] lg:sticky lg:top-0 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-[calc(100dvh-14rem)]">
+        <div className="order-3 h-[60vh] lg:sticky lg:top-0 lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-[calc(100dvh-14rem)]">
           <DocumentViewer imageUrl={api.getFormImageUrl(form.id)} field={activeField} alt={`עמוד ${form.page_number} של ${form.source_file}`} />
         </div>
 
         {!loading && (
-          <div className="space-y-4 lg:col-start-1">
-            {!pending && <FieldList fields={fields} activeFieldId={activeFieldId} onSelect={selectField} />}
+          <div className={`space-y-4 lg:col-start-1 ${editMode ? 'order-1 lg:order-none lg:row-start-1' : 'order-4 lg:order-none'}`}>
+            <FieldList
+              fields={fields}
+              activeFieldId={activeFieldId}
+              onSelect={selectField}
+              onEdit={editField}
+              onAdd={addField}
+              onDelete={deleteField}
+              saving={listSaving}
+              error={listError}
+            />
             <PageSources sources={form.sources} fields={fields} onSelectField={selectField} />
           </div>
         )}

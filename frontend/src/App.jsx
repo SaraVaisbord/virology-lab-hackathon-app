@@ -6,7 +6,6 @@ import DataTable from './components/DataTable'
 import TableToolbar from './components/TableToolbar'
 import ProcessingBanner from './components/ProcessingBanner'
 import FormDetailsModal from './components/form-details/FormDetailsModal'
-import ProfilePage from './components/ProfilePage'
 import { api } from './api'
 import { useForms } from './hooks/useForms'
 import { useDebouncedValue } from './hooks/useDebouncedValue'
@@ -26,9 +25,8 @@ function downloadBlob(blob, fileName) {
 export default function App() {
   const [darkMode, setDarkMode] = useState(false)
   const [filters, setFilters] = useState(INITIAL_FILTERS)
-  const [selected, setSelected] = useState(null) // { form, fieldId }
+  const [selected, setSelected] = useState(null) // { form, fieldId, editMode }
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [toast, setToast] = useState(null) // { text, tone }
 
@@ -77,7 +75,7 @@ export default function App() {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-surface-page transition-colors duration-200 dark:bg-slate-950" dir="rtl">
-      <Header darkMode={darkMode} onToggleDark={() => setDarkMode((value) => !value)} onOpenProfile={() => setProfileOpen(true)} />
+      <Header darkMode={darkMode} onToggleDark={() => setDarkMode((value) => !value)} />
 
       <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4">
         <div className="flex-none">
@@ -101,6 +99,7 @@ export default function App() {
               filters={filters}
               onChangeFilters={changeFilters}
               onOpenForm={(form, fieldId) => setSelected({ form, fieldId })}
+              onEditForm={(form) => setSelected({ form, editMode: true })}
               onRetry={handleRetry}
             />
           </div>
@@ -111,15 +110,12 @@ export default function App() {
 
       {uploadOpen && <UploadPanel onUploaded={() => refresh()} onClose={() => setUploadOpen(false)} />}
 
-      {profileOpen && (
-        <ProfilePage darkMode={darkMode} onToggleDark={() => setDarkMode((value) => !value)} onClose={() => setProfileOpen(false)} />
-      )}
-
       {selected && (
         <FormDetailsModal
           key={selected.form.id}
           form={selected.form}
           initialFieldId={selected.fieldId}
+          editMode={selected.editMode}
           onClose={() => setSelected(null)}
           onFormUpdated={(form) => { updateItem(form); refresh() }}
           onRetry={handleRetry}

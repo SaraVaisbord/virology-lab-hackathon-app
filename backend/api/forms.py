@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, Response
 import config
 from db import queries
 from db.constants import EXPORT_MODE_LABELS
-from schemas.forms import ConfirmFieldRequest, FormDetailResponse, FormsPage, FormsSummary
+from schemas.forms import AddFieldRequest, ConfirmFieldRequest, FormDetailResponse, FormsPage, FormsSummary
 from services.export_service import build_forms_workbook
 from services.extraction_queue import extraction_queue
 from services.forms_service import resolve_image_path
@@ -101,6 +101,25 @@ def confirm_field(form_id: int, field_id: int, payload: ConfirmFieldRequest):
     corrected = payload.corrected_value.strip() if payload.corrected_value else None
     try:
         return queries.confirm_field(form_id=form_id, field_id=field_id, corrected_value=corrected)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{form_id}/fields", response_model=FormDetailResponse)
+def add_field(form_id: int, payload: AddFieldRequest):
+    """A value typed by the lab worker — works whether or not the form was (or could be) extracted."""
+    try:
+        return queries.add_manual_field(form_id, payload.field_name, payload.value)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.delete("/{form_id}/fields/{field_id}", response_model=FormDetailResponse)
+def delete_field(form_id: int, field_id: int):
+    try:
+        return queries.delete_field(form_id, field_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

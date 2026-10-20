@@ -14,6 +14,7 @@ from .constants import (
     FORM_COLUMN_LABELS,
     FORM_STATUSES,
     FORM_TYPES,
+    MULTI_VALUE_FIELDS,
     PENDING_FORM_STATUSES,
     REVIEW_FIELD_STATUSES,
     SENDER_KINDS,
@@ -176,8 +177,11 @@ def save_source_results(form_id: int, **results: Any) -> None:
             setattr(form, column, _to_json(value))
 
 
-def _recalculate_form_status(session, form: Form) -> None:
-    """A form is approved once no field needs a human decision."""
+def _recalculate_form_status(session, form: Form, keep_pending: bool = False) -> None:
+    """A form is approved once no field needs a human decision.
+    keep_pending: a manual edit on a form still in the extraction queue must not take it out of the queue."""
+    if keep_pending and form.status in PENDING_FORM_STATUSES:
+        return
     needs_review = any(row.status in REVIEW_FIELD_STATUSES for row in form.extracted_fields)
     form.status = "extracted" if needs_review or not form.extracted_fields else "approved"
 
@@ -222,6 +226,46 @@ def save_extraction(form_id: int, fields: list[dict[str, Any]], form_type: str |
         _recalculate_form_status(session, form)
 
 
+def add_manual_field(form_id: int, field_name: str, value: str) -> dict[str, Any]:
+    """A value typed by the lab worker (no extraction needed). It counts as confirmed and survives re-extraction.
+    Single-value fields get it only when they have no value yet — an existing value is edited, not duplicated."""
+    _require_in(field_name, FIELDS, "field_name")
+    value = (value or "").strip()
+    if not value:
+        raise ValueError("Value cannot be empty.")
+    with SessionLocal() as session, session.begin():
+        form = session.get(Form, form_id, options=[selectinload(Form.extracted_fields)])
+        if form is None:
+            raise LookupError(f"Form {form_id} not found.")
+        existing = [row for row in form.extracted_fields if row.field_name == field_name]
+        if field_name not in MULTI_VALUE_FIELDS and any(row.status != "not_found" for row in existing):
+            raise ValueError(f"{field_name} already has a value — edit it instead.")
+        for row in existing:
+            if row.status == "not_found":  # the placeholder "not found" row is replaced by the real value
+                form.extracted_fields.remove(row)
+        form.extracted_fields.append(ExtractedField(
+            field_name=field_name, value=value, corrected_value=value, status="confirmed",
+            evidence=_to_json({"manual": True}),
+        ))
+        session.flush()
+        _recalculate_form_status(session, form, keep_pending=True)
+        return form_to_dict(form, with_sources=True)
+
+
+def delete_field(form_id: int, field_id: int) -> dict[str, Any]:
+    """Remove a value the lab worker rejected. (A later re-extraction may read it again; that's intended —
+    machine readings are evidence, the worker decides again.)"""
+    with SessionLocal() as session, session.begin():
+        form = session.get(Form, form_id, options=[selectinload(Form.extracted_fields)])
+        row = next((r for r in form.extracted_fields if r.id == field_id), None) if form else None
+        if row is None:
+            raise LookupError(f"Field {field_id} not found for form {form_id}.")
+        form.extracted_fields.remove(row)
+        session.flush()
+        _recalculate_form_status(session, form, keep_pending=True)
+        return form_to_dict(form, with_sources=True)
+
+
 def confirm_field(form_id: int, field_id: int, corrected_value: str | None) -> dict[str, Any]:
     """Human approval of one field value (optionally corrected)."""
     with SessionLocal() as session, session.begin():
@@ -237,7 +281,7 @@ def confirm_field(form_id: int, field_id: int, corrected_value: str | None) -> d
         row.status = "confirmed"
         session.flush()
 
-        _recalculate_form_status(session, row.form)
+        _recalculate_form_status(session, row.form, keep_pending=True)
         return form_to_dict(row.form, with_sources=True)
 
 

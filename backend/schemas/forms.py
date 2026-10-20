@@ -79,3 +79,8 @@ class FormsSummary(BaseModel):
 
 class ConfirmFieldRequest(BaseModel):
     corrected_value: str | None = None
+
+
+class AddFieldRequest(BaseModel):
+    field_name: str
+    value: str

@@ -42,6 +42,13 @@ function SourceEvidence({ field, sources, onUse }) {
   const meta = useMeta()
   const evidence = field.evidence
   if (!evidence) return null
+  if (evidence.manual) {
+    return (
+      <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800 dark:border-teal-900 dark:bg-teal-950/30 dark:text-teal-200">
+        הערך הוזן ידנית על ידי הלבורנטית
+      </div>
+    )
+  }
   const { llm, barcode_candidates: barcodes = [], assignment, agreement } = evidence
   const barcodeSource = sources?.barcode_result
   const ocrSource = sources?.ocr_result

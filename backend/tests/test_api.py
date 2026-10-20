@@ -108,3 +108,42 @@ def test_disabled_worker_is_reported_in_summary(client):
     summary = client.get("/forms/summary").json()
     assert summary["pending"] == 1
     assert summary["queue"] == {"running": False, "paused_until": None, "pause_reason": "disabled"}
+
+
+def test_manual_add_edit_delete_without_extraction(client):
+    """The lab worker can fill a form by hand, whatever its extraction state."""
+    from db import queries
+
+    form_id = make_form(queries)  # still queued — never extracted
+    body = client.post(f"/forms/{form_id}/fields", json={"field_name": "commitment_number", "value": " 2646 "}).json()
+    body = client.post(f"/forms/{form_id}/fields", json={"field_name": "commitment_number", "value": "2647"}).json()
+    commitments = [f for f in body["fields"] if f["field_name"] == "commitment_number"]
+    assert [f["value"] for f in commitments] == ["2646", "2647"]
+    assert all(f["status"] == "confirmed" and f["evidence"] == {"manual": True} for f in commitments)
+    assert body["status"] == "uploaded"  # a manual edit doesn't take the form out of the queue
+
+    # single-value field: one value only — a second one must be an edit
+    assert client.post(f"/forms/{form_id}/fields", json={"field_name": "id_number", "value": "000000018"}).status_code == 200
+    assert client.post(f"/forms/{form_id}/fields", json={"field_name": "id_number", "value": "1"}).status_code == 400
+    assert client.post(f"/forms/{form_id}/fields", json={"field_name": "nope", "value": "1"}).status_code == 400
+    assert client.post(f"/forms/{form_id}/fields", json={"field_name": "sender", "value": "  "}).status_code == 400
+
+    # edit any value (even an already confirmed one), then delete one
+    field_id = commitments[1]["id"]
+    edited = client.patch(f"/forms/{form_id}/fields/{field_id}/confirm", json={"corrected_value": "2648"}).json()
+    assert [f["value"] for f in edited["fields"] if f["field_name"] == "commitment_number"] == ["2646", "2648"]
+    after = client.delete(f"/forms/{form_id}/fields/{field_id}").json()
+    assert [f["value"] for f in after["fields"] if f["field_name"] == "commitment_number"] == ["2646"]
+    assert client.delete(f"/forms/{form_id}/fields/{field_id}").status_code == 404
+
+
+def test_manual_value_replaces_not_found_and_completes_a_failed_form(client):
+    from db import queries
+
+    form_id = make_form(queries)
+    queries.save_extraction(form_id, [{"field_name": "id_number", "status": "not_found"}])
+    queries.set_form_status(form_id, "failed", error="x")
+    body = client.post(f"/forms/{form_id}/fields", json={"field_name": "id_number", "value": "000000018"}).json()
+    ids = [f for f in body["fields"] if f["field_name"] == "id_number"]
+    assert [(f["value"], f["status"]) for f in ids] == [("000000018", "confirmed")]
+    assert body["status"] == "approved"

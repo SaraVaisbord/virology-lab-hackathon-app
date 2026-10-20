@@ -39,6 +39,8 @@ MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 # 300 dpi is what OCR needs; the old 200 dpi + 2000 px cap left only ~171 dpi on A4.
 PAGE_RENDER_DPI = _env_int("PAGE_RENDER_DPI", 300)
 PAGE_MAX_SIDE_PX = _env_int("PAGE_MAX_SIDE_PX", 3600)  # A4 at 300 dpi is 3508 px high
+# Pages of one upload straightened in parallel (each needs a full-resolution image in memory).
+UPLOAD_PAGE_WORKERS = _env_int("UPLOAD_PAGE_WORKERS", 4)
 
 # ── API ──────────────────────────────────────────────────────────────────────
 CORS_ORIGINS = [

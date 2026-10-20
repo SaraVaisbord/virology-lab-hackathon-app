@@ -43,7 +43,7 @@ The frontend has no copies of labels/statuses: `MetaProvider` loads `/meta` once
 - `db/` — `constants.py`, `models.py`, `queries.py` (all SQL incl. paging/filtering/sorting), `session.py`, `seed_senders.py`
 - `alembic/` — migrations · `tests/` — pytest suite (`conftest.py` gives an isolated DB per test)
 
-### Frontend (`fronend/src/`)
+### Frontend (`frontend/src/`)
 
 - `main.jsx` — mounts `<MetaProvider><App/></MetaProvider>`
 - `App.jsx` — layout, filters state, modals, export, toasts
@@ -58,8 +58,7 @@ The frontend has no copies of labels/statuses: `MetaProvider` loads `/meta` once
   - `DataTable.jsx` — columns from meta, multi-value chips, per-column sort/filter, row actions (view / retry)
   - `UploadPanel.jsx` — drag & drop upload modal
   - `form-details/` — `FormDetailsModal`, `FieldEditor` (single "approve field" action), `FieldList`, `DocumentViewer` (highlight + zoom)
-  - `ProfilePage.jsx` — profile panel (still mock data – no users in the backend yet)
-  - `ui/` — `ModalShell`, `StatusBadge`, `Toggle`
+  - `ui/` — `ModalShell`, `StatusBadge`
 
 ## 4. Data model
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, Eye, FileText, Loader2, RotateCcw, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Eye, FileText, Loader2, Pencil, RotateCcw, X } from 'lucide-react'
 import StatusBadge from './ui/StatusBadge'
 import { useMeta } from '../meta/MetaContext'
 import { useClickOutside } from '../hooks/useClickOutside'
@@ -72,7 +72,7 @@ function FieldValues({ form, fieldKey, rows, onOpenField }) {
   )
 }
 
-export default function DataTable({ forms, total, loading, loadingMore, hasMore, onLoadMore, error, filters, onChangeFilters, onOpenForm, onRetry }) {
+export default function DataTable({ forms, total, loading, loadingMore, hasMore, onLoadMore, error, filters, onChangeFilters, onOpenForm, onEditForm, onRetry }) {
   const meta = useMeta()
   const [menuColumn, setMenuColumn] = useState(null)
   const sentinelRef = useRef(null)
@@ -184,6 +184,9 @@ export default function DataTable({ forms, total, loading, loadingMore, hasMore,
                       <div className="flex justify-center gap-1">
                         <button type="button" onClick={() => onOpenForm(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={`צפה בטופס ${form.source_file}`} title="צפייה ואימות">
                           <Eye size={15} />
+                        </button>
+                        <button type="button" onClick={() => onEditForm(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={`ערוך את שדות ${form.source_file}`} title="עריכת שדות">
+                          <Pencil size={15} />
                         </button>
                         {form.status === 'failed' && (
                           <button type="button" onClick={() => onRetry(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40" aria-label={`נסה שוב לעבד את ${form.source_file}`} title="נסה שוב">
