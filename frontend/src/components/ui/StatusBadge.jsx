@@ -10,9 +10,10 @@ const STYLES = {
   failed: { icon: XCircle, className: 'text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-950/60' },
   verified: { icon: ShieldCheck, className: 'text-teal-700 bg-teal-50 dark:text-teal-300 dark:bg-teal-950/60' },
   confirmed: { icon: CheckCircle2, className: 'text-teal-700 bg-teal-50 dark:text-teal-300 dark:bg-teal-950/60' },
-  conflict: { icon: GitCompareArrows, className: 'text-orange-800 bg-orange-100 ring-1 ring-orange-300 dark:text-orange-200 dark:bg-orange-950/60 dark:ring-orange-800' },
-  unverified: { icon: AlertTriangle, className: 'text-pink-700 bg-pink-50 dark:text-pink-300 dark:bg-pink-950/60' },
-  uncertain: { icon: AlertTriangle, className: 'text-pink-700 bg-pink-50 dark:text-pink-300 dark:bg-pink-950/60' },
+  // A source conflict is more serious than "needs review": deeper orange-red with a ring, distinct from amber.
+  conflict: { icon: GitCompareArrows, className: 'text-orange-900 bg-orange-200 ring-1 ring-orange-500 dark:text-orange-100 dark:bg-orange-900/60 dark:ring-orange-600' },
+  unverified: { icon: AlertTriangle, className: 'text-review-800 bg-review-100 dark:text-review-300 dark:bg-review-950/60' },
+  uncertain: { icon: AlertTriangle, className: 'text-review-800 bg-review-100 dark:text-review-300 dark:bg-review-950/60' },
   not_found: { icon: XCircle, className: 'text-gray-600 bg-gray-100 dark:text-gray-300 dark:bg-gray-800' },
 }
 const FALLBACK = { icon: Clock, className: 'text-gray-600 bg-gray-100 dark:text-gray-300 dark:bg-gray-800' }

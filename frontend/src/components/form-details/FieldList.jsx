@@ -55,7 +55,7 @@ export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onA
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">שדות הטופס</p>
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${toReview ? 'bg-pink-100 text-pink-700 dark:bg-pink-950/60 dark:text-pink-200' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'}`}>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${toReview ? 'bg-review-100 text-review-800 dark:bg-review-950/60 dark:text-review-200' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'}`}>
           {toReview ? `${toReview} לאימות` : 'אין שדות לאימות'}
         </span>
       </div>

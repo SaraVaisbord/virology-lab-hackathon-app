@@ -57,7 +57,7 @@ export default function DocumentViewer({ imageUrl, field, alt }) {
             {box && (
               <div
                 ref={highlightRef}
-                className="pointer-events-none absolute rounded-md border-2 border-pink-500 bg-pink-500/10 shadow-[0_0_0_9999px_rgba(15,23,42,0.28)] transition-all duration-300"
+                className="pointer-events-none absolute rounded-md border-2 border-review-500 bg-review-400/15 shadow-[0_0_0_9999px_rgba(15,23,42,0.28)] transition-all duration-300"
                 style={{
                   left: pct(Math.max(0, box.x - HIGHLIGHT_PADDING)),
                   top: pct(Math.max(0, box.y - HIGHLIGHT_PADDING)),

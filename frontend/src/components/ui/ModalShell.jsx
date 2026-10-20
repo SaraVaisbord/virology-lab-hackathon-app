@@ -81,7 +81,7 @@ export default function ModalShell({ title, icon: Icon, onClose, children, foote
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-4 dark:border-gray-800 sm:px-[30px] sm:py-5">
           <div className="flex min-w-0 items-center gap-2.5">
-            {Icon && <Icon size={22} className="shrink-0 text-pink-500" />}
+            {Icon && <Icon size={22} className="shrink-0 text-teal-600 dark:text-teal-400" />}
             <h2 dir="auto" className="truncate text-lg font-bold text-navy-800 dark:text-gray-100">{title}</h2>
           </div>
           <button

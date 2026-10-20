@@ -44,6 +44,6 @@
   }
 
   .uncertain-cell {
-    @apply rounded-full px-2.5 py-0.5 cursor-pointer transition-all duration-150 text-pink-700 dark:text-pink-300 font-medium text-xs bg-pink-50 dark:bg-transparent border border-pink-200 dark:border-pink-800 hover:border-pink-400 dark:hover:border-pink-500 hover:bg-pink-50/80;
+    @apply rounded-full px-2.5 py-0.5 cursor-pointer transition-all duration-150 text-review-800 dark:text-review-300 font-medium text-xs bg-review-50 dark:bg-transparent border border-review-300 dark:border-review-800 hover:border-review-500 dark:hover:border-review-500 hover:bg-review-100;
   }
 }

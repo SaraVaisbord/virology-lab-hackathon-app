@@ -159,7 +159,7 @@ export default function FieldEditor({ field, sources, onApprove, saving, error }
       </div>
 
       {field.reason && (
-        <div className="rounded-lg border border-pink-200 bg-pink-50 px-3 py-2 text-sm leading-6 text-pink-700 dark:border-pink-900 dark:bg-pink-950/20 dark:text-pink-200">
+        <div className="rounded-lg border border-review-200 bg-review-50 px-3 py-2 text-sm leading-6 text-review-900 dark:border-review-900 dark:bg-review-950/20 dark:text-review-200">
           <span className="font-bold">סיבת הספק: </span>{field.reason}
         </div>
       )}
