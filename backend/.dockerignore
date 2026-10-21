@@ -1,0 +1,11 @@
+# Never in the image: secrets, local data, sample documents, evaluation output, tests.
+.env
+.env.*
+!.env.example
+data/
+fiels/
+results/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -34,7 +34,9 @@
 
 ## טכנולוגיות
 
-- **צד שרת:** Python, FastAPI, SQLAlchemy + Alembic, SQLite (נתמך גם מסד אחר דרך `DATABASE_URL`), OpenCV, Tesseract, zbar, Google Gemini
+- **צד שרת:** Python, FastAPI, SQLAlchemy + Alembic, OpenCV, Tesseract, zbar, Google Gemini
+- **מסד נתונים:** SQLite בפיתוח, PostgreSQL (AWS RDS) בענן – כל הבדיקות רצות על שניהם
+- **קבצים ותמונות:** תיקייה מקומית בפיתוח, באקט S3 פרטי בענן (`storage.py`) – לעולם לא בתוך מסד הנתונים
 - **צד לקוח:** React 18, Vite, Tailwind CSS
 
 ## הרצה מקומית
@@ -56,7 +58,11 @@ npm install
 npm run dev                       # http://localhost:5173
 ```
 
-בדיקות: `pytest` מתוך `backend/`.
+בדיקות: `pytest` מתוך `backend/`. על PostgreSQL: `TEST_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/db pytest`.
+
+## הרצה בענן (AWS)
+
+`backend/Dockerfile` ו-`frontend/Dockerfile` בונים את שתי התמונות. התשתית (EKS, RDS, S3, ECR) ב-[virology-lab-hackathon-infra](https://github.com/SaraVaisbord/virology-lab-hackathon-infra), והפריסה ב-[virology-lab-hackathon-k8s](https://github.com/SaraVaisbord/virology-lab-hackathon-k8s). הגדרות הענן (משתני סביבה): `DATABASE_URL`, `STORAGE_BACKEND=s3`, `S3_BUCKET`, `API_PREFIX=/api`.
 
 פירוט נוסף על צד השרת: [`backend/README.md`](backend/README.md). תכנון המערכת: [`system_design.md`](system_design.md).
 
