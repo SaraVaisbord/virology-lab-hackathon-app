@@ -108,8 +108,9 @@ def _gemini_keys() -> list[str]:
 
 GEMINI_API_KEYS = _gemini_keys()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-flash-latest")
-# Models to fall back to when the primary one is overloaded (503/504) or out of quota, in order.
-GEMINI_FALLBACK_MODELS = _env_list("GEMINI_FALLBACK_MODELS")
+# Models to fall back to when the primary one is overloaded (503/504) or out of quota, in order. Each model has its
+# own daily quota. flash-lite is weaker (more extra/missed values — those are never "verified" and go to review).
+GEMINI_FALLBACK_MODELS = _env_list("GEMINI_FALLBACK_MODELS") or ["models/gemini-3.5-flash-lite"]
 GEMINI_MODELS = list(dict.fromkeys([GEMINI_MODEL, *GEMINI_FALLBACK_MODELS]))
 GEMINI_TIMEOUT_SECONDS = _env_int("GEMINI_TIMEOUT_SECONDS", 120)
 GEMINI_MAX_ATTEMPTS = _env_int("GEMINI_MAX_ATTEMPTS", 2)
