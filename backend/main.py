@@ -32,11 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(meta_router)
-app.include_router(uploads_router)
-app.include_router(forms_router)
+for router in (meta_router, uploads_router, forms_router):
+    app.include_router(router, prefix=config.API_PREFIX)
 
 
-@app.get("/health")
+@app.get(f"{config.API_PREFIX}/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}

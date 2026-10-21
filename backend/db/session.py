@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 import config
@@ -29,9 +28,9 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
-@event.listens_for(Engine, "connect")
+@event.listens_for(engine, "connect")  # this engine only — never sent to PostgreSQL or to other engines
 def _set_sqlite_pragma(dbapi_connection, connection_record):
-    if not IS_SQLITE:
+    if engine.dialect.name != "sqlite":
         return
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")

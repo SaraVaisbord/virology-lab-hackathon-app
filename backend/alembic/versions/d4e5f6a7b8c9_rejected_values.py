@@ -8,6 +8,8 @@ Create Date: 2026-10-21 12:00:00
 from alembic import op
 import sqlalchemy as sa
 
+from db.migration_utils import recreate_mode
+
 revision = "d4e5f6a7b8c9"
 down_revision = "c3d4e5f6a7b8"
 branch_labels = None
@@ -20,5 +22,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("forms", recreate="always") as batch_op:
+    with op.batch_alter_table("forms", recreate=recreate_mode()) as batch_op:
         batch_op.drop_column("rejected_values")

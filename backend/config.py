@@ -28,9 +28,16 @@ def _env_int(name: str, default: int) -> int:
 
 # ── Storage ──────────────────────────────────────────────────────────────────
 DATA_DIR = Path(os.getenv("APP_DATA_DIR", str(BASE_DIR / "data"))).resolve()
-UPLOADS_DIR = DATA_DIR / "uploads"
-PAGES_IMG_DIR = DATA_DIR / "pages_img"
+# Database: SQLite in DATA_DIR by default; on AWS a separate PostgreSQL server (RDS), e.g.
+# DATABASE_URL=postgresql+psycopg://user:password@host:5432/dbname
 DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{(DATA_DIR / 'app.db').as_posix()}"
+# Files (uploads, page images) — see storage.py. "local" = DATA_DIR; "s3" = private bucket S3_BUCKET.
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
+S3_BUCKET = os.getenv("S3_BUCKET", "")
+S3_PREFIX = os.getenv("S3_PREFIX", "")
+AWS_REGION = os.getenv("AWS_REGION", "")
+# Path prefix of every API route: "" locally; "/api" behind the AWS load balancer (/ → frontend, /api → backend).
+API_PREFIX = os.getenv("API_PREFIX", "").rstrip("/")
 
 # ── Uploads & page rendering ─────────────────────────────────────────────────
 MAX_FILE_SIZE_MB = _env_int("MAX_FILE_SIZE_MB", 50)

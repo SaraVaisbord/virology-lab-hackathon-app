@@ -13,6 +13,7 @@ import json
 from alembic import op
 import sqlalchemy as sa
 
+from db.migration_utils import recreate_mode
 from db.models import in_clause
 
 revision = "c3d4e5f6a7b8"
@@ -47,14 +48,14 @@ def _split_combined_results(conn) -> None:
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("forms", recreate="always") as batch_op:
+    with op.batch_alter_table("forms", recreate=recreate_mode()) as batch_op:
         batch_op.alter_column("raw_llm_json", new_column_name="llm_result", existing_type=sa.Text(), existing_nullable=True)
         batch_op.add_column(sa.Column("barcode_result", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("ocr_result", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("source_errors", sa.Text(), nullable=True))
     _split_combined_results(op.get_bind())
 
-    with op.batch_alter_table("extracted_fields", recreate="always") as batch_op:
+    with op.batch_alter_table("extracted_fields", recreate=recreate_mode()) as batch_op:
         batch_op.add_column(sa.Column("barcode_value", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("evidence", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("box_source", sa.String(length=16), nullable=True))
@@ -69,7 +70,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("UPDATE extracted_fields SET ocr_value = barcode_value WHERE barcode_value IS NOT NULL")
     op.execute("UPDATE extracted_fields SET status = 'uncertain' WHERE status = 'conflict'")
-    with op.batch_alter_table("extracted_fields", recreate="always") as batch_op:
+    with op.batch_alter_table("extracted_fields", recreate=recreate_mode()) as batch_op:
         batch_op.drop_constraint(op.f("ck_extracted_fields_status"), type_="check")
         batch_op.create_check_constraint(op.f("ck_extracted_fields_status"), f"status IN {in_clause(_PREVIOUS_FIELD_STATUSES)}")
         batch_op.drop_constraint(op.f("ck_extracted_fields_box_source"), type_="check")
@@ -77,7 +78,7 @@ def downgrade() -> None:
         batch_op.drop_column("evidence")
         batch_op.drop_column("barcode_value")
 
-    with op.batch_alter_table("forms", recreate="always") as batch_op:
+    with op.batch_alter_table("forms", recreate=recreate_mode()) as batch_op:
         batch_op.drop_column("source_errors")
         batch_op.drop_column("ocr_result")
         batch_op.drop_column("barcode_result")

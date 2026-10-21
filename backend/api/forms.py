@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 
 import config
 from db import queries
@@ -9,7 +9,7 @@ from db.constants import EXPORT_MODE_LABELS
 from schemas.forms import AddFieldRequest, ConfirmFieldRequest, FormDetailResponse, FormsPage, FormsSummary
 from services.export_service import build_forms_workbook
 from services.extraction_queue import extraction_queue
-from services.forms_service import resolve_image_path
+from storage import get_storage
 
 router = APIRouter(prefix="/forms", tags=["forms"])
 
@@ -90,10 +90,14 @@ def get_form(form_id: int):
 @router.get("/{form_id}/image")
 def get_form_image(form_id: int):
     form = queries.get_form(form_id)
-    image_path = resolve_image_path(form["image_path"]) if form else None
-    if image_path is None:
+    try:
+        data = get_storage().get(form["image_path"]) if form else None
+    except ValueError:  # a key that points outside the storage
+        data = None
+    if data is None:
         raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path=str(image_path), media_type="image/png")
+    # private: the page may hold patient data — browsers must not keep it in shared caches
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.patch("/{form_id}/fields/{field_id}/confirm", response_model=FormDetailResponse)

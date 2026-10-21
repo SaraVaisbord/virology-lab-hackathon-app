@@ -452,7 +452,8 @@ def _sort_expression(filters: FormFilters):
             .where(ExtractedField.form_id == Form.id, ExtractedField.field_name == filters.sort_by)
             .scalar_subquery()
         )
-        return direction(first_value)
+        # Forms without this field always last — PostgreSQL would otherwise put them first in descending order.
+        return direction(first_value).nulls_last()
     raise ValueError(f"Unknown sort column: {filters.sort_by!r}")
 
 

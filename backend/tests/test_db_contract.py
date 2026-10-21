@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from alembic import command
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 
 from tests.conftest import alembic_config, make_form
 
@@ -11,9 +11,10 @@ def _tables(app_env) -> set[str]:
     import db.session
 
     engine = create_engine(db.session.DATABASE_URL, future=True)
-    with engine.connect() as conn:
-        rows = conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-        return {row[0] for row in rows}
+    try:
+        return set(inspect(engine).get_table_names())  # works on SQLite and PostgreSQL
+    finally:
+        engine.dispose()
 
 
 def test_migration_upgrade_and_downgrade(app_env):
@@ -153,9 +154,10 @@ def test_upgrade_splits_combined_llm_and_barcode_results(app_env):
     engine = create_engine(db.session.DATABASE_URL, future=True)
     combined = {"llm": {"commitment_number": [{"value": "2646"}]}, "barcodes": [{"data": "2646", "type": "CODE39"}]}
     with engine.begin() as conn:
-        conn.exec_driver_sql(
-            "INSERT INTO forms (id, source_file, file_hash, page_number, image_path, status, raw_llm_json) VALUES (1, 'a', 'h', 3, 'p', 'extracted', ?)",
-            (json.dumps(combined),),
+        conn.execute(
+            text("INSERT INTO forms (id, source_file, file_hash, page_number, image_path, status, raw_llm_json) "
+                 "VALUES (1, 'a', 'h', 3, 'p', 'extracted', :raw)"),
+            {"raw": json.dumps(combined)},
         )
         conn.exec_driver_sql("INSERT INTO extracted_fields (form_id, field_name, value, ocr_value, status) VALUES (1, 'commitment_number', '2646', '2646', 'verified')")
     engine.dispose()

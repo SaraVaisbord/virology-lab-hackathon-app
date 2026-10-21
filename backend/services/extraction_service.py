@@ -51,7 +51,7 @@ from db.constants import (
     label_keywords,
 )
 from preprocessing import preprocess
-from services.forms_service import resolve_image_path
+from storage import get_storage
 from validators import digits_only, israeli_id_is_valid, match_key, parse_iso_like_date, text_key
 
 logger = logging.getLogger(__name__)
@@ -387,11 +387,11 @@ def read_image(path: Path) -> np.ndarray:
     return image
 
 
-def write_image(path: Path, image: np.ndarray) -> None:
+def png_bytes(image: np.ndarray) -> bytes:
     ok, encoded = cv2.imencode(".png", image)
     if not ok:
         raise ValueError("Cannot encode image")
-    encoded.tofile(str(path))
+    return encoded.tobytes()
 
 
 def run_barcode_scan(views, page: int | None) -> dict[str, Any]:
@@ -443,14 +443,18 @@ def extract_for_form(form: dict[str, Any], provider: str = "gemini", use_llm: bo
     (no tokens) and only an LLM answer already stored for the page is merged. Raises on LLM failure — local
     results are already saved by then."""
     form_id, page = form["id"], form.get("page_number")
-    image_path = resolve_image_path(form.get("image_path"))
-    if image_path is None:
-        raise FileNotFoundError("page image not found")
     use_llm = config.LLM_ENABLED if use_llm is None else use_llm
+    files, key = get_storage(), form.get("image_path")
+    # A local copy of the page (S3: a temporary download) — OpenCV and the LLM clients read files.
+    with files.local_path(key) as image_path:  # FileNotFoundError when the page image is missing
+        views = preprocess(read_image(image_path), source_dpi=config.PAGE_RENDER_DPI)
+        normalized = png_bytes(views.normalized)
+        image_path.write_bytes(normalized)  # what the LLM reads below
+        files.put(key, normalized, "image/png")  # what the lab worker sees
+        _extract_sources(form_id, page, views, image_path, provider, use_llm)
 
-    views = preprocess(read_image(image_path), source_dpi=config.PAGE_RENDER_DPI)
-    write_image(image_path, views.normalized)
 
+def _extract_sources(form_id: int, page: int | None, views, image_path: Path, provider: str, use_llm: bool) -> None:
     barcode_result = run_barcode_scan(views, page)
     ocr_result = run_ocr(views, barcode_result["items"], page)
     errors = {source: result["error"] for source, result in (("barcode", barcode_result), ("ocr", ocr_result)) if result["status"] == "error"}

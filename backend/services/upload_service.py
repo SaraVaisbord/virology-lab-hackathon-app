@@ -4,7 +4,6 @@ import hashlib
 import io
 from concurrent.futures import ThreadPoolExecutor
 from itertools import islice
-from pathlib import Path
 from typing import Any, Iterator
 
 import cv2
@@ -16,6 +15,7 @@ import config
 from db.constants import UPLOAD_TYPES
 from preprocessing import straighten
 from db.queries import add_form, delete_forms_by_hash, find_forms_by_hash
+from storage import PAGES_PREFIX, UPLOADS_PREFIX, get_storage, page_key, upload_key
 
 _ILLEGAL_FILENAME_CHARS = set('/\\:*?"<>|')
 
@@ -31,9 +31,10 @@ def _detect_file_type(file_bytes: bytes) -> str | None:
     return next((kind for kind, spec in UPLOAD_TYPES.items() if file_bytes.startswith(spec["magic"])), None)
 
 
-def _page_image_path(file_hash: str, page_number: int) -> Path:
-    config.PAGES_IMG_DIR.mkdir(parents=True, exist_ok=True)
-    return config.PAGES_IMG_DIR / f"{file_hash}_p{page_number}.png"
+def _png_bytes(image: Image.Image) -> bytes:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def _normalize_page(image: Image.Image) -> Image.Image:
@@ -77,14 +78,10 @@ def _iter_pages(file_bytes: bytes, file_type: str) -> Iterator[Image.Image]:
         yield Image.open(io.BytesIO(file_bytes))
 
 
-def _relative(path: Path) -> str:
-    return path.relative_to(config.DATA_DIR).as_posix()
-
-
 def _cleanup(file_hash: str) -> None:
-    for directory in (config.PAGES_IMG_DIR, config.UPLOADS_DIR):
-        for path in directory.glob(f"{file_hash}_*"):
-            path.unlink(missing_ok=True)
+    files = get_storage()
+    for prefix in (PAGES_PREFIX, UPLOADS_PREFIX):
+        files.delete_prefix(f"{prefix}/{file_hash}_")
     delete_forms_by_hash(file_hash)
 
 
@@ -116,8 +113,8 @@ def process_upload(file: Any) -> dict[str, Any]:
         return _result(original_name, "duplicate", [item["id"] for item in existing])
 
     try:
-        config.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        (config.UPLOADS_DIR / f"{file_hash}_{original_name}").write_bytes(file_bytes)
+        files = get_storage()
+        files.put(upload_key(file_hash, original_name), file_bytes, UPLOAD_TYPES[file_type]["mime"])
 
         form_ids = []
         pages = enumerate(_iter_pages(file_bytes, file_type), start=1)
@@ -126,9 +123,9 @@ def process_upload(file: Any) -> dict[str, Any]:
         with ThreadPoolExecutor(max_workers=config.UPLOAD_PAGE_WORKERS) as pool:
             while batch := list(islice(pages, config.UPLOAD_PAGE_WORKERS)):
                 for (page_number, _), page in zip(batch, pool.map(_normalize_page, (page for _, page in batch))):
-                    path = _page_image_path(file_hash, page_number)
-                    page.save(path, format="PNG")
-                    form_ids.append(add_form(source_file=original_name, file_hash=file_hash, page_number=page_number, image_path=_relative(path)))
+                    key = page_key(file_hash, page_number)
+                    files.put(key, _png_bytes(page), "image/png")
+                    form_ids.append(add_form(source_file=original_name, file_hash=file_hash, page_number=page_number, image_path=key))
         return _result(original_name, "created", form_ids)
     except Exception as exc:
         _cleanup(file_hash)

@@ -25,12 +25,26 @@ def alembic_config() -> Config:
     return cfg
 
 
+def _empty_database(url: str) -> None:
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(url, future=True)
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+    engine.dispose()
+
+
 @pytest.fixture
 def app_env(tmp_path, monkeypatch):
     """Isolated data dir + migrated SQLite DB; reloads modules that captured settings at import time."""
     data_dir = tmp_path / "data"
     monkeypatch.setenv("APP_DATA_DIR", str(data_dir))
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'app.db').as_posix()}")
+    # TEST_DATABASE_URL=postgresql+psycopg://… runs the whole suite on PostgreSQL (as on AWS RDS); emptied per test.
+    server_url = os.getenv("TEST_DATABASE_URL")
+    if server_url:
+        _empty_database(server_url)
+    monkeypatch.setenv("DATABASE_URL", server_url or f"sqlite:///{(tmp_path / 'app.db').as_posix()}")
     monkeypatch.setenv("WORKER_ENABLED", "0")
 
     import config

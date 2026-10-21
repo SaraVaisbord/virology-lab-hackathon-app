@@ -16,7 +16,7 @@ from db import queries
 from db.constants import FIELD_LABELS, FIELD_STATUS_LABELS
 from openai_extractor import extract_from_image as openai_extract
 from services.extraction_service import build_fields
-from services.forms_service import resolve_image_path
+from storage import get_storage
 
 _EMPTY = "—"
 
@@ -51,13 +51,13 @@ def main() -> None:
     gemini_result = sources.get("llm_result")
     if not gemini_result:
         sys.exit(f"Form {args.form_id} has no Gemini result yet (status: {form['status']})")
-    image_path = resolve_image_path(form["image_path"])
     barcodes = (sources.get("barcode_result") or {}).get("items", [])
     senders = [name for name, _ in queries.list_senders()]
 
     print(f"Form {form['id']} · {form['source_file']} · page {form['page_number']} · barcodes on page: {len(barcodes)}")
     print("Asking OpenAI…", flush=True)
-    openai_result = openai_extract(image_path, senders, model=args.openai_model)
+    with get_storage().local_path(form["image_path"]) as image_path:
+        openai_result = openai_extract(image_path, senders, model=args.openai_model)
 
     gemini_fields = build_fields(gemini_result, barcodes, senders, page=form["page_number"])
     openai_fields = build_fields(openai_result, barcodes, senders, page=form["page_number"])
