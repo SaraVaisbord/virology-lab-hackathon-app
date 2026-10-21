@@ -39,6 +39,7 @@ def _safe_key(key: str) -> str:
 class Storage(Protocol):
     def put(self, key: str, data: bytes, content_type: str) -> None: ...
     def get(self, key: str) -> bytes | None: ...
+    def delete(self, key: str) -> None: ...
     def delete_prefix(self, prefix: str) -> None: ...
     def local_path(self, key: str): ...  # context manager → Path of a local copy (FileNotFoundError if missing)
 
@@ -58,6 +59,9 @@ class LocalStorage:
     def get(self, key: str) -> bytes | None:
         path = self._path(key)
         return path.read_bytes() if path.is_file() else None
+
+    def delete(self, key: str) -> None:
+        self._path(key).unlink(missing_ok=True)
 
     def delete_prefix(self, prefix: str) -> None:
         folder, _, name_start = _safe_key(prefix).rpartition("/")
@@ -89,6 +93,9 @@ class S3Storage:
             return client.get_object(Bucket=self.bucket, Key=self._key(key))["Body"].read()
         except client.exceptions.NoSuchKey:
             return None
+
+    def delete(self, key: str) -> None:
+        _s3_client().delete_object(Bucket=self.bucket, Key=self._key(key))
 
     def delete_prefix(self, prefix: str) -> None:
         client = _s3_client()

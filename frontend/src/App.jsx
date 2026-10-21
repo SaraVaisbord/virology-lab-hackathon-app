@@ -73,6 +73,17 @@ export default function App() {
     }
   }
 
+  const handleDelete = async (form) => {
+    try {
+      await api.deleteForm(form.id)
+      if (selected?.form.id === form.id) setSelected(null)
+      refresh()
+      setToast({ text: `הרשומה "${form.source_file}" (עמוד ${form.page_number}) נמחקה`, tone: 'success' })
+    } catch (err) {
+      setToast({ text: err.message, tone: 'error' })
+    }
+  }
+
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-surface-page transition-colors duration-200 dark:bg-slate-950" dir="rtl">
       <Header darkMode={darkMode} onToggleDark={() => setDarkMode((value) => !value)} />
@@ -101,6 +112,7 @@ export default function App() {
               onOpenForm={(form, fieldId) => setSelected({ form, fieldId })}
               onEditForm={(form) => setSelected({ form, editMode: true })}
               onRetry={handleRetry}
+              onDelete={handleDelete}
             />
           </div>
         </div>

@@ -256,3 +256,34 @@ def test_a_deleted_value_never_comes_back_on_re_extraction(client):
     # the worker sets the value again on purpose → it is no longer rejected
     body = client.post(f"/forms/{form_id}/fields", json={"field_name": "central_number", "value": "947-550"}).json()
     assert body["rejected_values"] == {"sender": ["קפלן"]}
+
+
+def test_delete_a_form_removes_its_fields_and_files(client):
+    from db import queries
+    from tests.conftest import png_bytes
+
+    upload = client.post("/uploads", files={"files": ("scan.png", png_bytes(), "image/png")}).json()[0]
+    (form_id,) = upload["form_ids"]
+    queries.save_extraction(form_id, [{"field_name": "commitment_number", "value": "58153", "status": "verified"}])
+    image_key = queries.get_form(form_id)["image_path"]
+    import config
+
+    data_dir = config.DATA_DIR
+    assert (data_dir / image_key).is_file() and any((data_dir / "uploads").iterdir())
+
+    assert client.delete(f"/forms/{form_id}").status_code == 204
+    assert client.get(f"/forms/{form_id}").status_code == 404
+    assert not (data_dir / image_key).exists() and not any((data_dir / "uploads").iterdir())
+    assert client.get("/forms").json()["total"] == 0
+    assert client.delete(f"/forms/{form_id}").status_code == 404
+    # the same file can be uploaded again afterwards (it is no longer a duplicate)
+    assert client.post("/uploads", files={"files": ("scan.png", png_bytes(), "image/png")}).json()[0]["status"] == "created"
+
+
+def test_a_form_being_processed_cannot_be_deleted(client):
+    from db import queries
+
+    form_id = make_form(queries)
+    queries.set_form_status(form_id, "processing")
+    response = client.delete(f"/forms/{form_id}")
+    assert response.status_code == 409 and "בעיבוד" in response.json()["detail"]

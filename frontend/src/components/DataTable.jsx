@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, Copy, Eye, FileText, Loader2, Pencil, RotateCcw, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, Eye, FileText, Loader2, Pencil, RotateCcw, Trash2, X } from 'lucide-react'
 import StatusBadge from './ui/StatusBadge'
 import { useMeta } from '../meta/MetaContext'
 import { useClickOutside } from '../hooks/useClickOutside'
@@ -75,9 +75,10 @@ function FieldValues({ form, fieldKey, rows, onOpenField }) {
   )
 }
 
-export default function DataTable({ forms, total, loading, loadingMore, hasMore, onLoadMore, error, filters, onChangeFilters, onOpenForm, onEditForm, onRetry }) {
+export default function DataTable({ forms, total, loading, loadingMore, hasMore, onLoadMore, error, filters, onChangeFilters, onOpenForm, onEditForm, onRetry, onDelete }) {
   const meta = useMeta()
   const [menuColumn, setMenuColumn] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null) // form id waiting for "מחק?" — two clicks, never one
   const sentinelRef = useRef(null)
 
   const columns = [...LEADING_COLUMNS, ...meta.fields.map((field) => field.key), ...TRAILING_COLUMNS]
@@ -194,6 +195,27 @@ export default function DataTable({ forms, total, loading, loadingMore, hasMore,
                         {form.status === 'failed' && (
                           <button type="button" onClick={() => onRetry(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40" aria-label={`נסה שוב לעבד את ${form.source_file}`} title="נסה שוב">
                             <RotateCcw size={15} />
+                          </button>
+                        )}
+                        {confirmDelete === form.id ? (
+                          <span className="inline-flex items-center gap-1">
+                            <button type="button" onClick={() => { setConfirmDelete(null); onDelete(form) }} className="h-8 rounded-md bg-red-600 px-2 text-xs font-semibold text-white hover:bg-red-700" aria-label={`אישור מחיקת ${form.source_file}`}>
+                              מחק?
+                            </button>
+                            <button type="button" onClick={() => setConfirmDelete(null)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="ביטול מחיקה" title="ביטול">
+                              <X size={15} />
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDelete(form.id)}
+                            disabled={form.status === 'processing'}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-red-950/40"
+                            aria-label={`מחק את ${form.source_file}`}
+                            title={form.status === 'processing' ? 'הטופס בעיבוד כרגע – אפשר למחוק אחרי שיסתיים' : 'מחיקת רשומה'}
+                          >
+                            <Trash2 size={15} />
                           </button>
                         )}
                       </div>

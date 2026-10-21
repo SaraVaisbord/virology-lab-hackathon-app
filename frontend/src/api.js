@@ -17,7 +17,7 @@ async function request(path, { json, ...options } = {}) {
     body: json !== undefined ? JSON.stringify(json) : options.body,
   })
   if (!response.ok) throw await parseError(response)
-  return response.json()
+  return response.status === 204 ? null : response.json()
 }
 
 /** Table filters → query string (shared by listing and export, mirroring the backend). */
@@ -63,6 +63,7 @@ export const api = {
   deleteField: (formId, fieldId) => request(`/forms/${formId}/fields/${fieldId}`, { method: 'DELETE' }),
 
   retryForm: (formId) => request(`/forms/${formId}/retry`, { method: 'POST' }),
+  deleteForm: (formId) => request(`/forms/${formId}`, { method: 'DELETE' }),
 
   uploadFiles: (files) => {
     const body = new FormData()

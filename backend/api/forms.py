@@ -9,7 +9,7 @@ from db.constants import EXPORT_MODE_LABELS
 from schemas.forms import AddFieldRequest, ConfirmFieldRequest, FormDetailResponse, FormsPage, FormsSummary
 from services.export_service import build_forms_workbook
 from services.extraction_queue import extraction_queue
-from storage import get_storage
+from storage import UPLOADS_PREFIX, get_storage
 
 router = APIRouter(prefix="/forms", tags=["forms"])
 
@@ -129,6 +129,22 @@ def delete_field(form_id: int, field_id: int):
         return queries.delete_field(form_id, field_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/{form_id}", status_code=204)
+def delete_form(form_id: int):
+    """Delete a form (one page) with its fields and its page image; the uploaded file goes with its last page."""
+    try:
+        removed = queries.delete_form(form_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    files = get_storage()
+    files.delete(removed["image_path"])
+    if removed["last_page_of_upload"]:
+        files.delete_prefix(f"{UPLOADS_PREFIX}/{removed['file_hash']}_")
+    return Response(status_code=204)
 
 
 @router.post("/{form_id}/retry", response_model=FormDetailResponse)

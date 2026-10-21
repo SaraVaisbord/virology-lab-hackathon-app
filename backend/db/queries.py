@@ -177,6 +177,23 @@ def delete_forms_by_hash(file_hash: str) -> int:
         return int(session.execute(delete(Form).where(Form.file_hash == file_hash)).rowcount or 0)
 
 
+def delete_form(form_id: int) -> dict[str, Any]:
+    """Delete one form (page) and its fields. Refused while it is being processed (the worker holds it).
+    Returns what the caller must clean up in file storage: the page image and, when no other page of the same
+    upload is left, the uploaded file itself."""
+    with SessionLocal() as session, session.begin():
+        form = session.get(Form, form_id)
+        if form is None:
+            raise LookupError(f"Form {form_id} not found.")
+        if form.status == "processing":
+            raise ValueError("הטופס בעיבוד כרגע – אפשר למחוק אותו אחרי שהעיבוד יסתיים")
+        image_path, file_hash = form.image_path, form.file_hash
+        session.delete(form)  # fields go with it (cascade)
+        session.flush()
+        others = session.execute(select(func.count(Form.id)).where(Form.file_hash == file_hash)).scalar_one()
+        return {"image_path": image_path, "file_hash": file_hash, "last_page_of_upload": others == 0}
+
+
 def set_form_status(form_id: int, status: str, error: str | None = None) -> None:
     _require_in(status, FORM_STATUSES, "form status")
     with SessionLocal() as session, session.begin():
