@@ -147,6 +147,24 @@ def test_sample_label_is_a_commitment_only_on_leumit_forms(views):
     assert other.form_type is None and other_pairs == set()
 
 
+def test_phone_fax_department_numbers_are_dropped_but_not_the_rest_of_the_line(views):
+    # Maccabi header: "דרישה:606/50364186  ת.דרישה: …  טל: 04-6161999  מחלקה 1234" — "ת.דרישה" is not "ת.ד"
+    words = [_word("דרישה:", 0.90, 0.20), _word("50364186", 0.80, 0.20, 0.08), _word("ת.דרישה:", 0.70, 0.20),
+             _word("טל:", 0.55, 0.20, 0.03), _word("04-6161999", 0.44, 0.20, 0.1),
+             _word("מחלקה", 0.30, 0.20), _word("12345", 0.22, 0.20, 0.06), _word("0527736881", 0.05, 0.50, 0.1)]
+    pairs, result = _extract(views, words)
+    assert pairs == {("commitment_number", "50364186")}
+    assert [n["value"] for n in result.unassigned_numbers] == []  # phone, department, mobile — all gone
+
+
+def test_irrelevant_numbers_are_removed_from_the_ai_inventory():
+    llm = {"all_numbers": [{"value": "03-5303030", "label": ""}, {"value": "4069600", "label": "לאינטר פקס"},
+                           {"value": "13872", "label": "מ.ר."}, {"value": "947550", "label": "מרכזי"},
+                           {"value": "001122334", "label": "ת.ז"}]}
+    kept = local_extractor.drop_irrelevant_numbers(llm)["all_numbers"]
+    assert [n["value"] for n in kept] == ["947550", "001122334"]  # an ID is not mistaken for a phone
+
+
 def test_sample_label_is_a_commitment_where_the_page_says_so(views):
     # Rambam: "שימו לב! מספר הדגימה מהווה מספר התחייבות" — and the statement itself is not a label
     declaration = [_word("מספר", 0.60, 0.60), _word("הדגימה", 0.52, 0.60), _word("מהווה", 0.45, 0.60),

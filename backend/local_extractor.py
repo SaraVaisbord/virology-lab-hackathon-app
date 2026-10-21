@@ -32,7 +32,8 @@ from db.constants import (
     FORM_TYPE_MARKERS,
     HEBREW_PREFIXES,
     LOCAL_LABEL_LEXICON,
-    LOCAL_NEGATIVE_LABELS,
+    IRRELEVANT_NUMBER_LABELS,
+    PHONE_PATTERN,
     MULTI_VALUE_FIELDS,
     RECEIVED_DATE_ANCHOR_LABEL,
     SAMPLE_IS_COMMITMENT_FORM_TYPES,
@@ -84,7 +85,7 @@ DEFAULT_SETTINGS = LocalExtractionSettings()
 
 _DATE = re.compile(DATE_PATTERN)
 _GLUED = re.compile(r"^(\D{2,}?)[:׃\s]*(\d[\d./\-]{3,})$")  # "מרכזי:12043017"
-_PHONE = re.compile(r"^\+?\d{1,3}-\d|^0\d{1,2}-\d{6,8}$|^\+972")
+_PHONE = re.compile(PHONE_PATTERN)
 
 
 @dataclass
@@ -277,7 +278,9 @@ def _find_labels(lines: list[list[Token]], settings: LocalExtractionSettings, sa
             if any(_matches(text, word, settings) for text in texts for word in spec["exclude_if_line_has"]):
                 continue
             required = [t for t in line if any(_clean_word(t.text) == w.strip("'׳") or t.text.startswith(w) for w in spec["requires_one_of"])]
-            if not type_hits and spec["requires_one_of"] and not required:
+            # A keyword written as a label ("דרישה:") needs no number word; a heading ("דרישה לבדיקה") has no colon.
+            as_label = any(t.text.rstrip().endswith((":", "׃")) for t in hits)
+            if not type_hits and not as_label and spec["requires_one_of"] and not required:
                 continue
             hits = hits + type_hits
             box = hits[0].box
@@ -290,10 +293,39 @@ def _find_labels(lines: list[list[Token]], settings: LocalExtractionSettings, sa
     return labels
 
 
-def _mark_negative(lines: list[list[Token]]) -> None:
+_HEBREW = re.compile(r"[֐-׿]")
+
+
+def _is_irrelevant_label(text: str, settings: LocalExtractionSettings) -> bool:
+    return any(_matches(text, word, settings) for word in IRRELEVANT_NUMBER_LABELS)
+
+
+def is_irrelevant_number(value: str, label: str = "", settings: LocalExtractionSettings | None = None) -> bool:
+    """A phone / fax / department / hospital / … number (see IRRELEVANT_NUMBER_LABELS, PHONE_PATTERN)."""
+    settings = settings or DEFAULT_SETTINGS
+    return bool(_PHONE.search(str(value).strip())) or any(_is_irrelevant_label(word, settings) for word in re.split(r"[\s:]+", label or "") if word)
+
+
+def drop_irrelevant_numbers(llm_result: dict | None) -> dict | None:
+    """Remove phone / fax / department / hospital numbers from the AI's page inventory (the prompt asks it not to list
+    them; this enforces it)."""
+    if not llm_result or not isinstance(llm_result.get("all_numbers"), list):
+        return llm_result
+    kept = [n for n in llm_result["all_numbers"] if not is_irrelevant_number(n.get("value", ""), n.get("label", ""))]
+    return {**llm_result, "all_numbers": kept}
+
+
+def _mark_negative(lines: list[list[Token]], settings: LocalExtractionSettings) -> None:
+    """The number(s) right after an irrelevant label ("טל: 050-…", "מחלקה 12") are never form values. Only those —
+    not the whole line, which may also hold a real value (a commitment number, a received date)."""
     for line in lines:
-        if any(_clean_word(t.text) in {_clean_word(n) for n in LOCAL_NEGATIVE_LABELS} or t.text.startswith(LOCAL_NEGATIVE_LABELS) for t in line):
-            for token in line:
+        after_label = False
+        for token in sorted(line, key=lambda t: -t.box.right):  # reading order (right to left)
+            if _is_irrelevant_label(token.text, settings):
+                after_label = True
+            elif _HEBREW.search(token.text):
+                after_label = False  # another word: the irrelevant label's value has ended
+            elif after_label:
                 token.negative = True
 
 
@@ -494,7 +526,7 @@ def extract(views: PageViews, barcodes: list[dict] | None = None, words: list[Oc
     form_type = detect_form_type([t.text for t in tokens], settings)
     lines = _group_lines(tokens, settings)
     sample_label = sample_is_commitment(form_type, lines, settings)
-    _mark_negative(lines)
+    _mark_negative(lines, settings)
     # The two OCR passes often both read the same printed label — keep one, or it would claim two values.
     labels: list[Label] = []
     for label in _find_labels(lines, settings, sample_label):
@@ -534,7 +566,8 @@ def extract(views: PageViews, barcodes: list[dict] | None = None, words: list[Oc
     unassigned, seen = [], set()
     for t in tokens + barcode_tokens:
         value = _digits(t.text)
-        if t.negative or len(value) < settings.number_digits[0] or (value, t.source) in assigned or (value, t.source) in seen:
+        if (t.negative or _PHONE.search(t.text) or len(value) < settings.number_digits[0]
+                or (value, t.source) in assigned or (value, t.source) in seen):
             continue
         seen.add((value, t.source))
         unassigned.append({"value": value, "raw": t.text, "source": t.source, "box": asdict(t.box), "confidence": t.confidence})

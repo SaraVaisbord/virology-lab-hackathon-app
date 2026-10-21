@@ -100,7 +100,14 @@ LOCAL_LABEL_LEXICON = {
 # Hebrew one-letter prefixes (the/and/in/to/from/that/as) that may be glued to a label word: "ההתחייבות", "מתאריך".
 HEBREW_PREFIXES = ("ה", "ו", "ב", "ל", "מ", "ש", "כ")
 # Numbers on a line with one of these words are never form values (catalog no., phone, fax, zip, birth date).
-LOCAL_NEGATIVE_LABELS = ('מק"ט', "מק״ט", "טל", "טל'", "טלפון", "פקס", "מיקוד", "לידה", "ח.לידה", "ת.ד")
+# Numbers that are never form values — phone / mobile / fax, zip, P.O. box, address, catalog no., birth date,
+# department, hospital, doctor's licence (מ.ר). The number right after such a word is dropped everywhere: OCR results,
+# the AI's page inventory and the options shown to the lab worker.
+IRRELEVANT_NUMBER_LABELS = ('מק"ט', "מק״ט", "טל", "טלפון", "נייד", "פלאפון", "פקס", "מיקוד", "ת.ד", "כתובת", "לידה",
+                            "ח.לידה", "מחלקה", "מחלקת", "חולים", 'ביה"ח', 'בי"ח', "רישיון", "מ.ר")
+# Phone numbers by their shape, with or without a label: 03-5303030, 050-8259728, 0527736881, +972..., *3833.
+# (Undashed 9-digit numbers are NOT treated as phones — Israeli IDs look the same.)
+PHONE_PATTERN = r"^\+?972|^0\d{1,2}-\d{3}-?\d{4}$|^0[57]\d{8}$|^\*\d{4}$"
 
 FORM_STATUS_LABELS = {
     "uploaded": "בתור לעיבוד",

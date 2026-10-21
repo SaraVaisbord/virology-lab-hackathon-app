@@ -461,7 +461,7 @@ def extract_for_form(form: dict[str, Any], provider: str = "gemini", use_llm: bo
     llm_result = (queries.get_form(form_id, with_sources=True) or {}).get("sources", {}).get("llm_result")
     if use_llm:
         try:
-            llm_result = _llm_module(provider).extract_from_image(image_path, known_senders)
+            llm_result = local_extractor.drop_irrelevant_numbers(_llm_module(provider).extract_from_image(image_path, known_senders))
         except Exception as exc:
             queries.save_source_results(form_id, source_errors={**errors, "llm": user_facing_error(exc)})
             raise
