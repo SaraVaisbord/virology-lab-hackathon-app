@@ -4,7 +4,7 @@ import io
 
 from openpyxl import load_workbook
 
-from db.constants import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_STATUS_LABELS
+from db.constants import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_STATUS_LABELS, REASONS
 from tests.conftest import make_form
 
 
@@ -225,3 +225,34 @@ def test_a_date_set_by_the_lab_worker_is_stored_like_extracted_dates(client):
     body = client.post(f"/forms/{form_id}/fields", json={"field_name": "received_date", "value": "20.08.26"}).json()
     (field,) = [f for f in body["fields"] if f["field_name"] == "received_date"]
     assert field["value"] == "20/08/2026"
+
+
+def test_a_deleted_value_never_comes_back_on_re_extraction(client):
+    """Bug seen 2026-10-21: the lab worker deleted a machine reading and re-extraction put it back."""
+    from db import queries
+
+    form_id = make_form(queries)
+    machine = [
+        {"field_name": "central_number", "value": "947550", "llm_value": "947550", "status": "unverified"},
+        {"field_name": "central_number", "value": "123456", "llm_value": "123456", "status": "unverified"},
+        {"field_name": "sender", "value": "קפלן", "llm_value": "קפלן", "status": "unverified"},
+    ]
+    queries.save_extraction(form_id, machine)
+    fields = lambda body, name: [(f["value"], f["status"]) for f in body["fields"] if f["field_name"] == name]  # noqa: E731
+    ids = {f["value"]: f["id"] for f in queries.get_form(form_id)["fields"] if f["value"]}
+
+    client.delete(f"/forms/{form_id}/fields/{ids['947550']}")
+    body = client.delete(f"/forms/{form_id}/fields/{ids['קפלן']}").json()
+    assert body["rejected_values"] == {"central_number": ["947550"], "sender": ["קפלן"]}
+    # the emptied field still needs a decision — the form is not silently approved without it
+    assert fields(body, "sender") == [(None, "not_found")] and body["status"] == "extracted"
+
+    queries.save_extraction(form_id, machine)  # re-extraction reads the same values again
+    body = client.get(f"/forms/{form_id}").json()
+    assert fields(body, "central_number") == [("123456", "unverified")]
+    assert fields(body, "sender") == [(None, "not_found")]
+    assert REASONS["rejected_by_worker"] in next(f["reason"] for f in body["fields"] if f["field_name"] == "sender")
+
+    # the worker sets the value again on purpose → it is no longer rejected
+    body = client.post(f"/forms/{form_id}/fields", json={"field_name": "central_number", "value": "947-550"}).json()
+    assert body["rejected_values"] == {"sender": ["קפלן"]}

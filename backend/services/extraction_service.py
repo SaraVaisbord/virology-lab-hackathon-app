@@ -22,7 +22,6 @@ Verification rules (labels/thresholds in db/constants.py and config.py):
 from __future__ import annotations
 
 import logging
-import re
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -48,11 +47,12 @@ from db.constants import (
     MULTI_VALUE_FIELDS,
     OCR_UNAVAILABLE_REASON,
     REASONS,
+    SAMPLE_IS_COMMITMENT_FORM_TYPES,
     label_keywords,
 )
 from preprocessing import preprocess
 from services.forms_service import resolve_image_path
-from validators import israeli_id_is_valid, parse_iso_like_date
+from validators import digits_only, israeli_id_is_valid, match_key, parse_iso_like_date, text_key
 
 logger = logging.getLogger(__name__)
 
@@ -71,23 +71,7 @@ _OCR_CONFIDENCE_LEVELS = ((85, "high"), (60, "medium"))
 # ── Normalization (for comparison only — original values are always kept) ────
 
 
-def _digits(value: Any) -> str:
-    return re.sub(r"\D", "", str(value or ""))
-
-
-def _text_key(value: str) -> str:
-    return re.sub(r"[\s\"'״׳()\-]", "", value)
-
-
-def _match_key(field_name: str, value: Any) -> str:
-    """The form in which two readings of the same value compare equal."""
-    text = str(value or "").strip()
-    if field_name in _NUMBER_FIELDS:
-        return _digits(text)
-    if field_name == "received_date":
-        parsed = parse_iso_like_date(text)
-        return parsed.strftime("%d/%m/%Y") if parsed else text
-    return _text_key(text)
+# Value comparison (digits / dates / text keys) lives in validators.py — shared with the DB layer.
 
 
 def _one_edit_apart(a: str, b: str) -> bool:
@@ -118,16 +102,16 @@ def _box_from_barcode(barcode: dict[str, Any]) -> dict[str, float] | None:
 
 def match_sender(value: str, known_senders: list[str]) -> str | None:
     """Exact match, otherwise the longest known sender name contained in the value."""
-    key = _text_key(value)
+    key = text_key(value)
     if not key:
         return None
-    matches = [name for name in known_senders if _text_key(name) and _text_key(name) in key]
+    matches = [name for name in known_senders if text_key(name) and text_key(name) in key]
     return max(matches, key=len) if matches else None
 
 
 def _label_verdict(field_name: str, label: str, keywords: dict[str, tuple[str, ...]]) -> tuple[bool | None, str | None]:
     """Does the label next to the value support this field? Returns (supports, other_field_it_points_to).
-    keywords: label words per field for this form type (see label_keywords)."""
+    keywords: label words per field for this page (see label_keywords)."""
     if not label:
         return None, None
     if any(word in label for word in keywords.get(field_name, ())):
@@ -148,7 +132,7 @@ def _ocr_confidence_level(confidence: float) -> str:
 def _barcode_candidates(value_key: str, barcodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     candidates = []
     for barcode in barcodes:
-        key = _digits(barcode.get("data"))
+        key = digits_only(barcode.get("data"))
         match = "exact" if key == value_key else "near" if _one_edit_apart(key, value_key) else None
         if match:
             candidates.append({"data": barcode["data"], "type": barcode.get("type"), "match": match, "box": _box_from_barcode(barcode)})
@@ -159,7 +143,7 @@ def _format_doubts(field_name: str, value: str, ctx: dict[str, Any]) -> tuple[st
     """Normalize the value for display and return the format problems found."""
     doubts: list[str] = []
     if field_name == "id_number":
-        value = _digits(value)
+        value = digits_only(value)
         if not israeli_id_is_valid(value):
             doubts.append(REASONS["invalid_id_checksum"])
     elif field_name == "received_date":
@@ -301,6 +285,11 @@ def form_type_of(ocr_result: dict[str, Any] | None, llm_result: dict[str, Any] |
     return None
 
 
+def sample_is_commitment_on(ocr_result: dict[str, Any] | None, form_type: str | None) -> bool:
+    """Does "דגימה" label the commitment number on this page? Leumit forms, or the page says so itself (seen by OCR)."""
+    return form_type in SAMPLE_IS_COMMITMENT_FORM_TYPES or bool((ocr_result or {}).get("sample_is_commitment"))
+
+
 def build_fields(
     llm_result: dict[str, Any] | None,
     barcodes: list[dict[str, Any]],
@@ -308,24 +297,24 @@ def build_fields(
     page: int | None = None,
     local_candidates: list[dict[str, Any]] | None = None,
     ocr_numbers: list[dict[str, Any]] | None = None,
-    form_type: str | None = None,
+    sample_is_commitment: bool = False,
 ) -> list[dict[str, Any]]:
     """Merge LLM candidates, local (OCR/barcode) candidates and barcodes into field rows (one row per value).
     ocr_numbers: numbers the OCR read without a label (they confirm readings, not assignments).
-    form_type: some labels exist only on one fund's forms (Leumit "דגימה" = commitment number)."""
+    sample_is_commitment: "דגימה" labels the commitment number on this page (see sample_is_commitment_on)."""
     llm_result = llm_result or {}
     local_candidates = local_candidates or []
-    ocr_unlabeled = {_digits(n["value"]): n["raw"] for n in ocr_numbers or [] if n.get("source", "ocr").startswith("ocr")}
+    ocr_unlabeled = {digits_only(n["value"]): n["raw"] for n in ocr_numbers or [] if n.get("source", "ocr").startswith("ocr")}
     llm_by_field = {name: _llm_candidates(llm_result, name) for name in FIELDS}
 
     llm_claims: dict[str, set[str]] = {}
     local_claims: dict[str, set[str]] = {}
     for name in AMBIGUOUS_NUMBER_FIELDS:
         for item in llm_by_field[name]:
-            llm_claims.setdefault(_match_key(name, item["value"]), set()).add(name)
+            llm_claims.setdefault(match_key(name, item["value"]), set()).add(name)
     for item in local_candidates:
         if item["field"] in AMBIGUOUS_NUMBER_FIELDS:
-            local_claims.setdefault(_match_key(item["field"], item["value"]), set()).add(item["field"])
+            local_claims.setdefault(match_key(item["field"], item["value"]), set()).add(item["field"])
 
     ctx = {
         "barcodes": [b for b in barcodes if b.get("data")],
@@ -333,7 +322,7 @@ def build_fields(
         "llm_claims": llm_claims,
         "local_claims": local_claims,
         "ocr_numbers": ocr_unlabeled,
-        "label_keywords": label_keywords(form_type),
+        "label_keywords": label_keywords(sample_is_commitment),
     }
 
     fields: list[dict[str, Any]] = []
@@ -341,10 +330,10 @@ def build_fields(
         # Group every reading of this field by its comparable key (LLM first, best local candidate per key).
         llm_items: dict[str, dict] = {}
         for item in llm_by_field[field_name]:
-            llm_items.setdefault(_match_key(field_name, item["value"]), item)
+            llm_items.setdefault(match_key(field_name, item["value"]), item)
         local_items: dict[str, dict] = {}
         for item in sorted((c for c in local_candidates if c["field"] == field_name), key=lambda c: (c.get("rank", 0), c["distance"])):
-            local_items.setdefault(_match_key(field_name, item["value"]), item)
+            local_items.setdefault(match_key(field_name, item["value"]), item)
         keys = list(dict.fromkeys([*llm_items, *local_items]))
         if not keys:
             fields.append(_not_found(field_name, page))
@@ -480,7 +469,8 @@ def extract_for_form(form: dict[str, Any], provider: str = "gemini", use_llm: bo
 
     form_type = form_type_of(ocr_result, llm_result)
     fields = build_fields(llm_result, barcode_result["items"], known_senders, page=page, local_candidates=ocr_result["candidates"],
-                          ocr_numbers=ocr_result.get("unassigned_numbers"), form_type=form_type)
+                          ocr_numbers=ocr_result.get("unassigned_numbers"),
+                          sample_is_commitment=sample_is_commitment_on(ocr_result, form_type))
     queries.save_extraction(form_id, fields, form_type=form_type)
 
 
@@ -496,7 +486,8 @@ def reverify_form(form_id: int) -> bool:
     ocr_numbers = (sources.get("ocr_result") or {}).get("unassigned_numbers", [])
     form_type = form_type_of(sources.get("ocr_result"), sources.get("llm_result"))
     queries.save_extraction(form_id, build_fields(sources.get("llm_result"), barcodes, known_senders, page=form["page_number"],
-                                                  local_candidates=local, ocr_numbers=ocr_numbers, form_type=form_type),
+                                                  local_candidates=local, ocr_numbers=ocr_numbers,
+                                                  sample_is_commitment=sample_is_commitment_on(sources.get("ocr_result"), form_type)),
                             form_type=form_type)
     return True
 

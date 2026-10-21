@@ -3,10 +3,30 @@ from __future__ import annotations
 from datetime import datetime
 import re
 
+from db.constants import FIELD_KINDS
+
 
 def digits_only(value) -> str:
     """The digits of a value — how two readings of the same number are compared (spaces, dashes ignored)."""
     return re.sub(r"\D", "", str(value or ""))
+
+
+def text_key(value: str) -> str:
+    """A text value without spaces, quotes, brackets and dashes — for comparing names and senders."""
+    return re.sub(r"[\s\"'״׳()\-]", "", value)
+
+
+def match_key(field_name: str, value) -> str:
+    """The form in which two readings of the same value compare equal: numbers by their digits, dates by
+    DD/MM/YYYY, text without punctuation. Original values are always kept; this is for comparison only."""
+    text = str(value or "").strip()
+    kind = FIELD_KINDS.get(field_name, "text")
+    if kind in ("number", "id"):
+        return digits_only(text)
+    if kind == "date":
+        parsed = parse_iso_like_date(text)
+        return parsed.strftime("%d/%m/%Y") if parsed else text
+    return text_key(text)
 
 
 def israeli_id_is_valid(id_number: str) -> bool:

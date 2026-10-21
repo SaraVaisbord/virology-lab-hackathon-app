@@ -45,6 +45,8 @@ class Form(Base):
     barcode_result: Mapped[str | None] = mapped_column(Text, nullable=True)  # {"status", "items" | "error"}
     ocr_result: Mapped[str | None] = mapped_column(Text, nullable=True)  # {"status", "items" | "reason"}
     source_errors: Mapped[str | None] = mapped_column(Text, nullable=True)  # {"llm": "...", ...} per failed source
+    # Values the lab worker deleted ({"field_name": [value, ...]}, JSON): re-extraction never puts them back.
+    rejected_values: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 

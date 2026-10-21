@@ -410,12 +410,17 @@ def test_one_date_under_the_central_number_can_verify():
     assert field["status"] == "verified" and field["evidence"]["ocr"]["anchor"] == "central_number"
 
 
-def test_sample_label_supports_a_commitment_only_on_leumit_forms():
+def test_sample_label_supports_a_commitment_only_where_the_sample_is_the_commitment():
+    from services.extraction_service import sample_is_commitment_on
+
     llm = {"commitment_number": [{"value": "7712345", "confidence": "high", "label": "מספר דגימה"}]}
-    (leumit,) = _by_name(build_fields(llm, [], SENDERS, form_type="leumit"), "commitment_number")
+    (declared,) = _by_name(build_fields(llm, [], SENDERS, sample_is_commitment=True), "commitment_number")
     (other,) = _by_name(build_fields(llm, [], SENDERS), "commitment_number")
-    assert leumit["evidence"]["assignment"]["label_supports"] is True
+    assert declared["evidence"]["assignment"]["label_supports"] is True
     assert other["evidence"]["assignment"]["label_supports"] is None
+    # Leumit forms always; any other form when its own text says so (OCR)
+    assert sample_is_commitment_on(None, "leumit") and not sample_is_commitment_on(None, "hospital")
+    assert sample_is_commitment_on({"sample_is_commitment": True}, "hospital")
 
 
 def test_case_label_no_longer_points_to_the_central_number():

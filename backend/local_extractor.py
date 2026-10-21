@@ -29,13 +29,15 @@ import ocr_reader
 from db.constants import (
     DATE_PATTERN,
     FIELD_KINDS,
-    FORM_TYPE_LABEL_KEYWORDS,
     FORM_TYPE_MARKERS,
     HEBREW_PREFIXES,
     LOCAL_LABEL_LEXICON,
     LOCAL_NEGATIVE_LABELS,
     MULTI_VALUE_FIELDS,
     RECEIVED_DATE_ANCHOR_LABEL,
+    SAMPLE_IS_COMMITMENT_FORM_TYPES,
+    SAMPLE_IS_COMMITMENT_LINE,
+    SAMPLE_LABEL,
 )
 from ocr_reader import OcrWord
 from preprocessing import PageViews
@@ -147,10 +149,12 @@ class LocalResult:
     labels: list[Label] = field(default_factory=list)
     unassigned_numbers: list[dict] = field(default_factory=list)
     form_type: str | None = None
+    sample_is_commitment: bool = False  # "דגימה" labels the commitment number on this page
 
     def as_dict(self) -> dict:
         return {
             "form_type": self.form_type,
+            "sample_is_commitment": self.sample_is_commitment,
             "candidates": [asdict(c) for c in self.candidates],
             "labels": [{"field": l.field, "text": l.text, "box": asdict(l.box)} for l in self.labels],
             "unassigned_numbers": self.unassigned_numbers,
@@ -246,15 +250,28 @@ def detect_form_type(texts: list[str], settings: LocalExtractionSettings | None 
     return found.pop() if len(found) == 1 else None
 
 
-def _find_labels(lines: list[list[Token]], settings: LocalExtractionSettings, form_type: str | None = None) -> list[Label]:
-    type_keywords = FORM_TYPE_LABEL_KEYWORDS.get(form_type or "", {})
+def _declares_sample_is_commitment(line: list[Token], settings: LocalExtractionSettings) -> bool:
+    """A printed line such as "מספר הדגימה מהווה מספר התחייבות" — the page's own statement."""
+    return all(any(_matches(t.text, word, settings) for t in line) for word in SAMPLE_IS_COMMITMENT_LINE)
+
+
+def sample_is_commitment(form_type: str | None, lines: list[list[Token]], settings: LocalExtractionSettings) -> bool:
+    """Does "דגימה" label the commitment number on this page? (Leumit, or the page says so itself.)"""
+    return form_type in SAMPLE_IS_COMMITMENT_FORM_TYPES or any(_declares_sample_is_commitment(line, settings) for line in lines)
+
+
+def _find_labels(lines: list[list[Token]], settings: LocalExtractionSettings, sample_label: bool = False) -> list[Label]:
+    """sample_label: "דגימה" also labels the commitment number on this page (see sample_is_commitment)."""
     labels = []
     for line in lines:
         texts = [t.text for t in line]
+        declaration = _declares_sample_is_commitment(line, settings)
         for field_name, spec in LOCAL_LABEL_LEXICON.items():
+            if field_name == "commitment_number" and declaration:
+                continue  # the statement itself is a sentence, not a label next to a value
             hits = [t for t in line if any(_matches(t.text, k, settings) for k in spec["keywords"])]
-            # Labels of this form type only (Leumit "דגימה"): the page already says which form it is.
-            type_hits = [t for t in line if any(_matches(t.text, k, settings) for k in type_keywords.get(field_name, ()))]
+            # "מספר דגימה" on a page where the sample number is the commitment: the page already says so.
+            type_hits = [t for t in line if sample_label and field_name == "commitment_number" and _matches(t.text, SAMPLE_LABEL, settings)]
             if not hits and not type_hits:
                 continue
             if any(_matches(text, word, settings) for text in texts for word in spec["exclude_if_line_has"]):
@@ -476,10 +493,11 @@ def extract(views: PageViews, barcodes: list[dict] | None = None, words: list[Oc
     tokens = _tokens_from_words(words, settings)
     form_type = detect_form_type([t.text for t in tokens], settings)
     lines = _group_lines(tokens, settings)
+    sample_label = sample_is_commitment(form_type, lines, settings)
     _mark_negative(lines)
     # The two OCR passes often both read the same printed label — keep one, or it would claim two values.
     labels: list[Label] = []
-    for label in _find_labels(lines, settings, form_type):
+    for label in _find_labels(lines, settings, sample_label):
         if not any(l.field == label.field and _overlap(l.box, label.box) > 0.3 for l in labels):
             labels.append(label)
 
@@ -520,4 +538,5 @@ def extract(views: PageViews, barcodes: list[dict] | None = None, words: list[Oc
             continue
         seen.add((value, t.source))
         unassigned.append({"value": value, "raw": t.text, "source": t.source, "box": asdict(t.box), "confidence": t.confidence})
-    return LocalResult(candidates=candidates, labels=labels, unassigned_numbers=unassigned, form_type=form_type)
+    return LocalResult(candidates=candidates, labels=labels, unassigned_numbers=unassigned, form_type=form_type,
+                       sample_is_commitment=sample_label)

@@ -61,6 +61,8 @@ class FormResponse(BaseModel):
     uploaded_at: datetime | None = None
     fields: list[FieldResponse] = Field(default_factory=list)
     duplicates: list[CommitmentDuplicate] = Field(default_factory=list)
+    # Values the lab worker deleted, per field — re-extraction never puts them back.
+    rejected_values: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class FormSources(BaseModel):

@@ -18,13 +18,14 @@ from .constants import (
     FORM_TYPES,
     MULTI_VALUE_FIELDS,
     PENDING_FORM_STATUSES,
+    REASONS,
     REVIEW_FIELD_STATUSES,
     SENDER_KINDS,
     SOURCE_LABELS,
 )
 from .models import ExtractedField, Form, Sender
 from .session import SessionLocal
-from validators import digits_only, parse_iso_like_date
+from validators import digits_only, match_key, parse_iso_like_date
 
 # ── Validation ───────────────────────────────────────────────────────────────
 
@@ -42,6 +43,32 @@ def _manual_value(field_name: str, value: str) -> str:
         if parsed is not None:
             return parsed.strftime("%d/%m/%Y")
     return value
+
+
+# ── Values the lab worker rejected (deleted) — never put back by re-extraction ─
+
+
+def _rejected(form: Form) -> dict[str, list[str]]:
+    return json.loads(form.rejected_values) if form.rejected_values else {}
+
+
+def _is_rejected(form: Form, field_name: str, value: Any) -> bool:
+    key = match_key(field_name, value)
+    return bool(key) and any(match_key(field_name, old) == key for old in _rejected(form).get(field_name, []))
+
+
+def _mark_rejected(form: Form, field_name: str, value: Any, rejected: bool) -> None:
+    """Add the value to (or, when the worker sets it again, remove it from) the form's rejected values."""
+    values = _rejected(form)
+    kept = [old for old in values.get(field_name, []) if match_key(field_name, old) != match_key(field_name, value)]
+    values[field_name] = kept + ([str(value)] if rejected else [])
+    form.rejected_values = _to_json({name: items for name, items in values.items() if items}) if any(values.values()) else None
+
+
+def _empty_field(form: Form, field_name: str) -> ExtractedField:
+    """A field left without a value still needs a decision: 'not found' (the worker confirms it empty or fills it)."""
+    reason = REASONS["rejected_by_worker" if _rejected(form).get(field_name) else "not_found"]
+    return ExtractedField(field_name=field_name, status="not_found", reason=reason)
 
 
 # ── Serialization (the only place ORM rows become dicts) ─────────────────────
@@ -102,6 +129,7 @@ def form_to_dict(form: Form, *, with_fields: bool = True, with_sources: bool = F
                  duplicates: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """duplicates: precomputed by the caller for a batch (see list_forms); otherwise looked up for this form."""
     data = {name: getattr(form, name) for name in _FORM_COLUMNS}
+    data["rejected_values"] = _rejected(form)
     if with_fields:
         data["fields"] = [field_to_dict(row) for row in form.extracted_fields]
         if duplicates is None:
@@ -238,7 +266,8 @@ def _recalculate_form_status(session, form: Form, keep_pending: bool = False) ->
 
 def save_extraction(form_id: int, fields: list[dict[str, Any]], form_type: str | None = None) -> None:
     """Replace the machine-extracted fields of a form. Fields a human already decided on (confirmed or
-    corrected) are kept as-is, so re-extraction / re-verification never discards a human decision.
+    corrected) are kept as-is, and values the lab worker deleted are never put back — so re-extraction /
+    re-verification never discards a human decision.
 
     Raw source results are stored separately via save_source_results().
     """
@@ -259,7 +288,7 @@ def save_extraction(form_id: int, fields: list[dict[str, Any]], form_type: str |
 
         for entry in fields:
             name = _require_in(entry.get("field_name"), FIELDS, "field_name")
-            if name in human_corrected:
+            if name in human_corrected or _is_rejected(form, name, entry.get("value") or entry.get("llm_value")):
                 continue
             _require_in(entry.get("status", "unverified"), FIELD_STATUSES, "field status")
             form.extracted_fields.append(
@@ -269,6 +298,11 @@ def save_extraction(form_id: int, fields: list[dict[str, Any]], form_type: str |
                     **{key: entry[key] for key in _WRITABLE_FIELD_KEYS if key in entry},
                 )
             )
+        # A field whose every reading was rejected still needs a decision.
+        present = {row.field_name for row in form.extracted_fields}
+        for name in FIELDS:
+            if name not in present and _rejected(form).get(name):
+                form.extracted_fields.append(_empty_field(form, name))
 
         form.form_type = form_type
         form.error = None
@@ -308,6 +342,7 @@ def add_manual_field(
             if row.status == "not_found" or (replace and field_name not in MULTI_VALUE_FIELDS):
                 form.extracted_fields.remove(row)
         coordinates = {key: float(box[key]) for key in ("x", "y", "width", "height")} if box else {}
+        _mark_rejected(form, field_name, value, rejected=False)  # set again on purpose: no longer rejected
         form.extracted_fields.append(ExtractedField(
             field_name=field_name, value=value, corrected_value=value, status="confirmed",
             evidence=_to_json({"manual": True, **({"picked_from": picked_from} if picked_from else {})}),
@@ -320,14 +355,19 @@ def add_manual_field(
 
 
 def delete_field(form_id: int, field_id: int) -> dict[str, Any]:
-    """Remove a value the lab worker rejected. (A later re-extraction may read it again; that's intended —
-    machine readings are evidence, the worker decides again.)"""
+    """Remove a value the lab worker rejected. It is remembered as rejected, so re-extraction never puts it back;
+    a field left with no value gets a 'not found' row — it still needs her decision (fill it or confirm it empty)."""
     with SessionLocal() as session, session.begin():
         form = session.get(Form, form_id, options=[selectinload(Form.extracted_fields)])
         row = next((r for r in form.extracted_fields if r.id == field_id), None) if form else None
         if row is None:
             raise LookupError(f"Field {field_id} not found for form {form_id}.")
+        value = row.corrected_value or row.value or row.llm_value
+        if value:
+            _mark_rejected(form, row.field_name, value, rejected=True)
         form.extracted_fields.remove(row)
+        if not any(other.field_name == row.field_name for other in form.extracted_fields):
+            form.extracted_fields.append(_empty_field(form, row.field_name))
         session.flush()
         _recalculate_form_status(session, form, keep_pending=True)
         return form_to_dict(form, with_sources=True)
@@ -347,6 +387,8 @@ def confirm_field(form_id: int, field_id: int, corrected_value: str | None) -> d
         if corrected_value is not None and corrected_value != row.value:
             row.corrected_value = corrected_value
             row.value = corrected_value
+        if row.value:
+            _mark_rejected(row.form, row.field_name, row.value, rejected=False)
         row.status = "confirmed"
         session.flush()
 

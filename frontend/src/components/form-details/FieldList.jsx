@@ -40,7 +40,7 @@ function InlineInput({ initial, onSave, onCancel, saving }) {
  * Every field of the form, always editable by the lab worker — independent of extraction (works for queued,
  * failed or never-extracted forms too). Pencil = edit a value, trash = remove it, plus = add a value.
  */
-export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onAdd, onDelete, duplicates = [], onCompare, saving, error }) {
+export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onAdd, onDelete, duplicates = [], rejectedValues = {}, onCompare, saving, error }) {
   const meta = useMeta()
   const groups = groupFieldsByName(fields)
   const toReview = fields.filter(meta.needsReview).length
@@ -118,6 +118,12 @@ export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onA
                   </div>
                 )
               })}
+
+              {rejectedValues[key]?.length > 0 && (
+                <p className="px-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  נמחק ע"י הלבורנטית (לא יוחזר בעיבוד חוזר): <span dir="auto">{rejectedValues[key].join(', ')}</span>
+                </p>
+              )}
 
               {canAdd && (editing === `add:${key}` ? (
                 <div className="rounded-lg border border-dashed border-teal-300 bg-white px-3 py-2 dark:border-teal-800 dark:bg-slate-900">

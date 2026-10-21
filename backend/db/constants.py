@@ -60,14 +60,18 @@ FIELD_LABEL_KEYWORDS = {
 # Health-fund form types recognised from a word printed on the page. Only funds whose name can't be mistaken for
 # an ordinary word are listed ("כללית" also means "general", e.g. "רפואה כללית").
 FORM_TYPE_MARKERS = {"leumit": ("לאומית",)}
-# Labels a field has only on one form type. On Leumit forms the commitment number is labelled "דגימה"; on any other
-# form that word names a sample/test number, which is NOT the commitment.
-FORM_TYPE_LABEL_KEYWORDS = {"leumit": {"commitment_number": ("דגימה",)}}
+# "דגימה" (sample) labels the commitment number only where the sample number IS the commitment: on Leumit forms,
+# and on any page that says so itself (Rambam: "מספר הדגימה מהווה מספר התחייבות"; Clalit: "מס' הדגימה משמש גם
+# כמס' אסמכתא להתחייבות"). Elsewhere "מספר דגימה" is a test number, NOT the commitment.
+SAMPLE_LABEL = "דגימה"
+SAMPLE_IS_COMMITMENT_FORM_TYPES = frozenset({"leumit"})
+# Both words on one printed line = the page's own declaration that its sample number is the commitment number.
+SAMPLE_IS_COMMITMENT_LINE = ("דגימה", "התחייבות")
 
 
-def label_keywords(form_type: str | None) -> dict[str, tuple[str, ...]]:
-    """FIELD_LABEL_KEYWORDS plus the labels specific to this form type."""
-    extra = FORM_TYPE_LABEL_KEYWORDS.get(form_type or "", {})
+def label_keywords(sample_is_commitment: bool = False) -> dict[str, tuple[str, ...]]:
+    """FIELD_LABEL_KEYWORDS, plus "דגימה" for the commitment number on pages where the sample number is the commitment."""
+    extra = {"commitment_number": (SAMPLE_LABEL,)} if sample_is_commitment else {}
     return {name: words + extra.get(name, ()) for name, words in FIELD_LABEL_KEYWORDS.items()}
 
 
@@ -166,6 +170,7 @@ REASONS = {
     "unknown_sender": "הגורם השולח לא נמצא ברשימת השולחים המוכרים",
     "low_confidence": "רמת ביטחון נמוכה בזיהוי הערך",
     "not_found": "השדה לא נמצא בטופס",
+    "rejected_by_worker": "הערך שזוהה נמחק על ידי הלבורנטית – יש להזין ערך נכון או לאשר שהשדה ריק",
     "received_dates_differ": "מתחת למספרים המרכזיים רשומים תאריכים שונים ({dates}) – יש לבחור את תאריך הקבלה",
 }
 

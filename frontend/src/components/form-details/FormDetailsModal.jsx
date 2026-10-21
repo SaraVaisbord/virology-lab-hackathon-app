@@ -167,6 +167,7 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
               onAdd={addField}
               onDelete={deleteField}
               duplicates={form.duplicates}
+              rejectedValues={form.rejected_values}
               onCompare={setCompare}
               saving={listSaving}
               error={listError}

@@ -147,6 +147,16 @@ def test_sample_label_is_a_commitment_only_on_leumit_forms(views):
     assert other.form_type is None and other_pairs == set()
 
 
+def test_sample_label_is_a_commitment_where_the_page_says_so(views):
+    # Rambam: "שימו לב! מספר הדגימה מהווה מספר התחייבות" — and the statement itself is not a label
+    declaration = [_word("מספר", 0.60, 0.60), _word("הדגימה", 0.52, 0.60), _word("מהווה", 0.45, 0.60),
+                   _word("מספר", 0.38, 0.60), _word("התחייבות", 0.29, 0.60, 0.08), _word("87299", 0.20, 0.60, 0.06)]
+    words = [_word("דגימה:", 0.50, 0.30), _word("944000351", 0.38, 0.30, 0.1)]
+    pairs, result = _extract(views, declaration + words)
+    assert result.sample_is_commitment and result.form_type is None
+    assert pairs == {("commitment_number", "944000351")}  # not 87299 next to the statement
+
+
 def test_received_date_is_the_one_under_the_central_number(views):
     under, elsewhere = _recent(5), _recent(30)
     _, result = _extract(views, [
