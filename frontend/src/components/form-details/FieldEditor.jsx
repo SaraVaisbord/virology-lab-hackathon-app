@@ -3,7 +3,7 @@ import { Barcode, Bot, CheckCircle2, Loader2, ScanText } from 'lucide-react'
 import StatusBadge from '../ui/StatusBadge'
 import { useMeta } from '../../meta/MetaContext'
 import { EMPTY, fieldDisplayValue } from '../../lib/format'
-import { digitsOf, fieldsUsing } from '../../lib/pageNumbers'
+import { fieldsUsing, fitsKind, valueKey } from '../../lib/pageNumbers'
 import PageNumberRow from './PageNumberRow'
 
 const AGREEMENT_STYLES = {
@@ -113,7 +113,8 @@ function SourceEvidence({ field, sources, onUse }) {
           <ValueLine
             value={evidence.ocr.raw}
             note={[
-              evidence.ocr.label ? `ליד התווית "${evidence.ocr.label}"` : 'נקרא בעמוד, בלי תווית ליד – מאשר את הקריאה, לא את השדה',
+              evidence.ocr.anchor ? `נמצא ${evidence.ocr.label}` // e.g. "under the central number 12043017"
+                : evidence.ocr.label ? `ליד התווית "${evidence.ocr.label}"` : 'נקרא בעמוד, בלי תווית ליד – מאשר את הקריאה, לא את השדה',
               evidence.ocr.source === 'barcode' ? 'הערך נקרא מברקוד שליד התווית' : null,
               evidence.ocr.confidence != null && evidence.ocr.source !== 'barcode' ? `ביטחון OCR ${Math.round(evidence.ocr.confidence)}` : null,
             ].filter(Boolean).join(' · ')}
@@ -148,11 +149,12 @@ export default function FieldEditor({ field, sources, numbers, fields, focusKey,
     inputRef.current?.focus()
   }
 
-  // Other numbers on the page — the value the worker needs is often one the field didn't get.
-  const ownKeys = new Set([field.value, field.llm_value, field.ocr_value, field.barcode_value].filter(Boolean).map(digitsOf))
+  // Other numbers / dates on the page that fit this field — the value the worker needs is often one the field didn't get.
+  const kind = meta.fieldKind(field.field_name)
+  const ownKeys = new Set([field.value, field.llm_value, field.ocr_value, field.barcode_value].filter(Boolean).map((v) => valueKey(v, meta.datePattern)))
   const otherNumbers = (numbers ?? [])
-    .filter((item) => !ownKeys.has(item.key))
-    .map((item) => ({ item, usedBy: fieldsUsing(fields ?? [], item.key) }))
+    .filter((item) => fitsKind(item, kind) && !ownKeys.has(item.key))
+    .map((item) => ({ item, usedBy: fieldsUsing(fields ?? [], item.key, meta.datePattern) }))
     .sort((a, b) => (a.usedBy.length > 0) - (b.usedBy.length > 0))
 
   const submit = (event) => {
@@ -175,9 +177,11 @@ export default function FieldEditor({ field, sources, numbers, fields, focusKey,
 
       <SourceEvidence field={field} sources={sources} onUse={useValue} />
 
-      {meta.isNumeric(field.field_name) && otherNumbers.length > 0 && (
+      {otherNumbers.length > 0 && (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-          <p className="mb-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">אפשרויות נוספות שנמצאו בעמוד</p>
+          <p className="mb-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
+            {kind === 'date' ? 'תאריכים נוספים שנמצאו בעמוד' : 'אפשרויות נוספות שנמצאו בעמוד'}
+          </p>
           <ul className="space-y-1.5">
             {otherNumbers.map(({ item, usedBy }) => (
               <PageNumberRow key={item.key} item={item} usedBy={usedBy} focused={item.key === focusKey} onShow={onShow} onUse={useValue} />

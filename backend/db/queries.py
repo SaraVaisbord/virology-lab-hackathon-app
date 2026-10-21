@@ -6,10 +6,12 @@ from typing import Any
 
 from sqlalchemy import Select, String, and_, asc, cast, delete, desc, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import object_session, selectinload
 
 from .constants import (
     FIELDS,
+    FIELD_KINDS,
+    ROW_KEY_FIELD,
     FIELD_STATUSES,
     FORM_COLUMN_LABELS,
     FORM_STATUSES,
@@ -22,6 +24,7 @@ from .constants import (
 )
 from .models import ExtractedField, Form, Sender
 from .session import SessionLocal
+from validators import digits_only, parse_iso_like_date
 
 # ── Validation ───────────────────────────────────────────────────────────────
 
@@ -29,6 +32,15 @@ from .session import SessionLocal
 def _require_in(value: Any, allowed, label: str) -> Any:
     if value not in allowed:
         raise ValueError(f"Invalid {label}: {value!r}")
+    return value
+
+
+def _manual_value(field_name: str, value: str) -> str:
+    """A value set by the lab worker, in the stored format: dates as DD/MM/YYYY (as extraction stores them)."""
+    if FIELD_KINDS[field_name] == "date":
+        parsed = parse_iso_like_date(value)
+        if parsed is not None:
+            return parsed.strftime("%d/%m/%Y")
     return value
 
 
@@ -54,10 +66,47 @@ def field_to_dict(row: ExtractedField) -> dict[str, Any]:
     return data
 
 
-def form_to_dict(form: Form, *, with_fields: bool = True, with_sources: bool = False) -> dict[str, Any]:
+def _commitment_duplicates(session, form_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    """Commitment numbers of these forms that another form has too (compared as digits), per form id.
+    The commitment number is the export's row key, so a repeat is flagged — never blocked: the lab worker decides.
+    Scans every commitment value in the DB (one small indexed query; fine at the lab's volume)."""
+    if not form_ids:
+        return {}
+    value = _field_display_value()
+    rows = session.execute(
+        select(ExtractedField.id, ExtractedField.form_id, value, ExtractedField.x, ExtractedField.y, ExtractedField.width,
+               ExtractedField.height, ExtractedField.box_source, Form.source_file, Form.page_number, Form.status)
+        .join(Form, Form.id == ExtractedField.form_id)
+        .where(ExtractedField.field_name == ROW_KEY_FIELD, value.is_not(None))
+    ).all()
+    by_key: dict[str, list] = {}
+    for row in rows:
+        if digits_only(row[2]):
+            by_key.setdefault(digits_only(row[2]), []).append(row)
+
+    wanted = set(form_ids)
+    result: dict[int, list[dict[str, Any]]] = {form_id: [] for form_id in form_ids}
+    for same in by_key.values():
+        for mine in (row for row in same if row.form_id in wanted):
+            for other in (row for row in same if row.form_id != mine.form_id):
+                result[mine.form_id].append({
+                    "field_id": mine.id, "value": mine[2],
+                    "other_form_id": other.form_id, "other_field_id": other.id, "other_value": other[2],
+                    "other_source_file": other.source_file, "other_page_number": other.page_number, "other_status": other.status,
+                    "x": other.x, "y": other.y, "width": other.width, "height": other.height, "box_source": other.box_source,
+                })
+    return result
+
+
+def form_to_dict(form: Form, *, with_fields: bool = True, with_sources: bool = False,
+                 duplicates: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """duplicates: precomputed by the caller for a batch (see list_forms); otherwise looked up for this form."""
     data = {name: getattr(form, name) for name in _FORM_COLUMNS}
     if with_fields:
         data["fields"] = [field_to_dict(row) for row in form.extracted_fields]
+        if duplicates is None:
+            duplicates = _commitment_duplicates(object_session(form), [form.id])[form.id]
+        data["duplicates"] = duplicates
     if with_sources:
         data["sources"] = {name: _from_json(getattr(form, name)) for name in SOURCE_COLUMNS}
     return data
@@ -243,6 +292,7 @@ def add_manual_field(
     value = (value or "").strip()
     if not value:
         raise ValueError("Value cannot be empty.")
+    value = _manual_value(field_name, value)
     if picked_from is not None:
         _require_in(picked_from, SOURCE_LABELS, "source")
     with SessionLocal() as session, session.begin():
@@ -292,6 +342,8 @@ def confirm_field(form_id: int, field_id: int, corrected_value: str | None) -> d
         if row is None:
             raise LookupError(f"Field {field_id} not found for form {form_id}.")
 
+        if corrected_value is not None:
+            corrected_value = _manual_value(row.field_name, corrected_value.strip())
         if corrected_value is not None and corrected_value != row.value:
             row.corrected_value = corrected_value
             row.value = corrected_value
@@ -377,7 +429,8 @@ def list_forms(filters: FormFilters, limit: int, offset: int = 0) -> tuple[list[
             .offset(offset)
         )
         rows = session.execute(stmt).scalars().all()
-        return [form_to_dict(form) for form in rows], int(total)
+        duplicates = _commitment_duplicates(session, [form.id for form in rows])
+        return [form_to_dict(form, duplicates=duplicates[form.id]) for form in rows], int(total)
 
 
 def forms_summary() -> dict[str, Any]:

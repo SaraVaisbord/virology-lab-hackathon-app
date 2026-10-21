@@ -7,15 +7,17 @@ from fastapi import APIRouter
 import config
 from db.constants import (
     AGREEMENT_LABELS,
-    BARCODE_FIELDS,
     BARCODE_MATCH_LABELS,
     CONFIDENCE_LABELS,
+    DATE_PATTERN,
     EXPORT_MODE_LABELS,
+    FIELD_KINDS,
     FIELD_LABELS,
     FIELD_STATUS_LABELS,
     FORM_COLUMN_LABELS,
     FORM_STATUS_LABELS,
     MULTI_VALUE_FIELDS,
+    ROW_KEY_FIELD,
     PENDING_FORM_STATUSES,
     QUEUE_PAUSE_REASON_LABELS,
     REVIEW_FIELD_STATUSES,
@@ -31,10 +33,12 @@ router = APIRouter(prefix="/meta", tags=["meta"])
 def get_meta():
     return {
         "fields": [
-            # numeric: values are digit strings, so numbers found on the page are offered as options for them
-            {"key": key, "label": label, "multi_value": key in MULTI_VALUE_FIELDS, "numeric": key in BARCODE_FIELDS}
+            # kind (text / number / id / date): which numbers found on the page are offered as options for the field
+            {"key": key, "label": label, "multi_value": key in MULTI_VALUE_FIELDS, "kind": FIELD_KINDS[key]}
             for key, label in FIELD_LABELS.items()
         ],
+        "row_key_field": ROW_KEY_FIELD,
+        "date_pattern": DATE_PATTERN,  # Python regex syntax that JavaScript also accepts
         "form_columns": FORM_COLUMN_LABELS,
         "form_statuses": FORM_STATUS_LABELS,
         "field_statuses": FIELD_STATUS_LABELS,

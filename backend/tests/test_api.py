@@ -4,7 +4,7 @@ import io
 
 from openpyxl import load_workbook
 
-from db.constants import FIELD_LABELS, FORM_STATUS_LABELS
+from db.constants import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_STATUS_LABELS
 from tests.conftest import make_form
 
 
@@ -67,10 +67,11 @@ def test_export_respects_filters_and_mode(client):
         assert response.status_code == 200
         return list(load_workbook(io.BytesIO(response.content)).active.values)
 
+    # One row per commitment (the row key): "keep" has two commitments → two rows
     filtered = rows("/forms/export?mode=filtered&query=keep")
-    assert len(filtered) == 2 and "1, 2" in filtered[1]
-    assert len(rows("/forms/export?mode=all&query=keep")) == 3
-    assert len(rows("/forms/export?mode=approved")) == 2  # keep is approved (all fields verified)
+    assert len(filtered) == 3 and "1" in filtered[1] and "2" in filtered[2]
+    assert len(rows("/forms/export?mode=all&query=keep")) == 4  # + "skip", which has no commitment yet: one row
+    assert len(rows("/forms/export?mode=approved")) == 3  # keep is approved (all fields verified)
     assert client.get("/forms/export?mode=nope").status_code == 400
 
 
@@ -169,3 +170,58 @@ def test_pick_a_page_number_into_a_field_keeps_its_location(client):
     ids = [f for f in replaced["fields"] if f["field_name"] == "id_number"]
     assert [(f["value"], f["box_source"]) for f in ids] == [("000000018", "ocr")]
     assert client.post(f"/forms/{form_id}/fields", json={"field_name": "sender", "value": "x", "picked_from": "nope"}).status_code == 400
+
+
+def test_export_repeats_patient_details_on_every_commitment_row():
+    from services.export_service import form_rows
+
+    form = {"fields": [
+        {"field_name": "commitment_number", "value": "111"},
+        {"field_name": "commitment_number", "value": "222"},
+        {"field_name": "central_number", "value": "9001"},
+        {"field_name": "central_number", "value": "9002"},
+        {"field_name": "id_number", "value": "000000018", "corrected_value": "000000026"},
+    ], "duplicates": []}
+    rows = form_rows(form)
+    assert [row["commitment_number"] for row in rows] == ["111", "222"]
+    assert all(row["central_number"] == "9001, 9002" and row["id_number"] == "000000026" for row in rows)
+
+
+def test_same_commitment_on_two_forms_is_flagged_with_where_it_is(client):
+    from db import queries
+
+    first, second, other = make_form(queries, file_hash="a"), make_form(queries, file_hash="b"), make_form(queries, file_hash="c")
+    box = {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.04}
+    queries.save_extraction(first, [{"field_name": "commitment_number", "value": "58153", "status": "verified"}])
+    queries.save_extraction(second, [{"field_name": "commitment_number", "value": "58-153", "status": "verified", "box_source": "ocr", **box}])
+    queries.save_extraction(other, [{"field_name": "commitment_number", "value": "99999", "status": "verified"}])
+
+    (dup,) = client.get(f"/forms/{first}").json()["duplicates"]  # compared as digits
+    assert dup["other_form_id"] == second and dup["other_source_file"] == "b.pdf" and dup["other_page_number"] == 1
+    assert (dup["x"], dup["y"], dup["box_source"]) == (0.1, 0.2, "ocr")  # where it is on the other page
+    listed = {item["id"]: item["duplicates"] for item in client.get("/forms?limit=10").json()["items"]}
+    assert [d["other_form_id"] for d in listed[second]] == [first] and listed[other] == []
+
+    export = load_workbook(io.BytesIO(client.get("/forms/export?mode=all").content)).active
+    header = [cell.value for cell in export[1]]
+    column = header.index(EXPORT_COLUMN_LABELS["duplicate_of"])
+    flagged = [row[column] for row in export.iter_rows(min_row=2, values_only=True) if row[column]]
+    assert len(flagged) == 2 and any("b.pdf" in note for note in flagged)
+
+
+def test_meta_gives_field_kinds_and_the_date_pattern(client):
+    import re
+
+    meta = client.get("/meta").json()
+    kinds = {field["key"]: field["kind"] for field in meta["fields"]}
+    assert kinds["received_date"] == "date" and kinds["commitment_number"] == "number" and kinds["id_number"] == "id"
+    assert re.search(meta["date_pattern"], "20.08.26") and meta["row_key_field"] == "commitment_number"
+
+
+def test_a_date_set_by_the_lab_worker_is_stored_like_extracted_dates(client):
+    from db import queries
+
+    form_id = make_form(queries)
+    body = client.post(f"/forms/{form_id}/fields", json={"field_name": "received_date", "value": "20.08.26"}).json()
+    (field,) = [f for f in body["fields"] if f["field_name"] == "received_date"]
+    assert field["value"] == "20/08/2026"

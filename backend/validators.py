@@ -4,6 +4,11 @@ from datetime import datetime
 import re
 
 
+def digits_only(value) -> str:
+    """The digits of a value — how two readings of the same number are compared (spaces, dashes ignored)."""
+    return re.sub(r"\D", "", str(value or ""))
+
+
 def israeli_id_is_valid(id_number: str) -> bool:
     """Validate Israeli ID checksum (returns True if valid).
 

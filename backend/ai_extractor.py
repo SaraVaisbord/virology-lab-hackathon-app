@@ -29,7 +29,7 @@ from typing import Any
 from PIL import Image
 
 import config
-from db.constants import CONFIDENCE_LEVELS, FIELDS, INVENTORY_KINDS, UNASSIGNED
+from db.constants import CONFIDENCE_LEVELS, FIELDS, FORM_TYPES, INVENTORY_KINDS, UNASSIGNED
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +206,8 @@ def _prompt_template() -> str:
 
 def build_prompt(known_senders: list[str]) -> str:
     senders = "\n".join(f"- {name}" for name in known_senders) or "- (none)"
-    return _prompt_template().replace("{{known_senders}}", senders)
+    form_types = " | ".join(f'"{form_type}"' for form_type in sorted(FORM_TYPES))
+    return _prompt_template().replace("{{known_senders}}", senders).replace("{{form_types}}", form_types)
 
 
 def _image_as_jpeg(image_path: Path) -> bytes:
@@ -245,7 +246,11 @@ def response_schema() -> dict[str, Any]:
         },
         "required": ["value", "kind", "assigned_to"],
     }
-    properties = {"all_numbers": {"type": "ARRAY", "items": inventory_item}}
+    properties = {
+        "all_numbers": {"type": "ARRAY", "items": inventory_item},
+        # Whose form it is — some labels exist only on one fund's forms (Leumit "דגימה" = commitment number).
+        "form_type": {"type": "STRING", "enum": sorted(FORM_TYPES)},
+    }
     properties.update({name: {"type": "ARRAY", "items": candidate} for name in FIELDS})
     properties["notes"] = {"type": "STRING"}
     return {"type": "OBJECT", "properties": properties, "required": ["all_numbers", *FIELDS]}

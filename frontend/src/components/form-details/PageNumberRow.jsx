@@ -37,7 +37,7 @@ export default function PageNumberRow({ item, focused, usedBy = [], onShow, assi
               השתמש בערך
             </button>
           )}
-          {assignOptions && (
+          {assignOptions?.length > 0 && (
             <select
               value=""
               disabled={disabled}

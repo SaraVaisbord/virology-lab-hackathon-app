@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Copy, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import StatusBadge from '../ui/StatusBadge'
 import { useMeta } from '../../meta/MetaContext'
 import { EMPTY, fieldDisplayValue, groupFieldsByName } from '../../lib/format'
@@ -40,7 +40,7 @@ function InlineInput({ initial, onSave, onCancel, saving }) {
  * Every field of the form, always editable by the lab worker — independent of extraction (works for queued,
  * failed or never-extracted forms too). Pencil = edit a value, trash = remove it, plus = add a value.
  */
-export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onAdd, onDelete, saving, error }) {
+export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onAdd, onDelete, duplicates = [], onCompare, saving, error }) {
   const meta = useMeta()
   const groups = groupFieldsByName(fields)
   const toReview = fields.filter(meta.needsReview).length
@@ -74,6 +74,7 @@ export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onA
               {rows.map((field, index) => {
                 const active = field.id === activeFieldId
                 const value = fieldDisplayValue(field)
+                const duplicate = duplicates.find((dup) => dup.field_id === field.id)
                 return (
                   <div
                     key={field.id}
@@ -89,6 +90,16 @@ export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onA
                           <span className="block text-xs text-gray-500 dark:text-gray-400">{label}{rows.length > 1 ? ` ${index + 1}` : ''}</span>
                           <span dir="auto" className="block truncate text-sm font-medium text-gray-800 dark:text-gray-100">{value || EMPTY}</span>
                         </button>
+                        {duplicate && (
+                          <button
+                            type="button"
+                            onClick={() => onCompare(duplicate)}
+                            title={`מופיע גם ב־${duplicate.other_source_file} עמ' ${duplicate.other_page_number} – לחצי להשוואה`}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 ring-1 ring-orange-300 hover:bg-orange-200 dark:bg-orange-950/60 dark:text-orange-200 dark:ring-orange-800"
+                          >
+                            <Copy size={11} /> כפול
+                          </button>
+                        )}
                         <StatusBadge status={field.status} kind="field" />
                         <button type="button" onClick={() => { setConfirmDelete(null); setEditing(field.id) }} className={iconButton} aria-label={`ערוך ${label}`} title="עריכה">
                           <Pencil size={14} />

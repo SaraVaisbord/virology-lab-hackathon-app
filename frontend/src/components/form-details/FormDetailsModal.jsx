@@ -3,6 +3,7 @@ import { FileSearch, Loader2, RotateCcw } from 'lucide-react'
 import ModalShell from '../ui/ModalShell'
 import StatusBadge from '../ui/StatusBadge'
 import DocumentViewer from './DocumentViewer'
+import DuplicateCompare, { DuplicateBanner } from './DuplicateCompare'
 import FieldEditor from './FieldEditor'
 import FieldList from './FieldList'
 import PageSources from './PageSources'
@@ -50,8 +51,15 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
   const deleteField = (fieldId) => applyEdit(() => api.deleteField(form.id, fieldId))
 
   // Numbers found on the page (all sources merged) — can be shown on the document and picked into a field.
-  const numbers = useMemo(() => pageNumbers(form.sources), [form.sources])
+  const numbers = useMemo(
+    () => pageNumbers(form.sources, { fieldKeys: meta.fields.map((field) => field.key), datePattern: meta.datePattern }),
+    [form.sources, meta],
+  )
   const [focus, setFocus] = useState(null)
+  // Commitment number shared with another form: shown side by side, the lab worker decides.
+  const [compare, setCompare] = useState(null)
+  // Fresh copy after every edit; gone once the worker fixed the number.
+  const activeCompare = compare && (form.duplicates ?? []).find((dup) => dup.field_id === compare.field_id && dup.other_field_id === compare.other_field_id)
   const assignNumber = (fieldName, item) => {
     const hasValue = (form.fields ?? []).some((field) => field.field_name === fieldName && field.status !== 'not_found')
     return applyEdit(() => api.addField(form.id, fieldName, item.value, {
@@ -123,6 +131,9 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{loadError}</div>
       )}
 
+      <DuplicateBanner duplicates={form.duplicates} onCompare={setCompare} />
+      {activeCompare && <DuplicateCompare form={form} duplicate={activeCompare} onClose={() => setCompare(null)} />}
+
       {/* Mobile order: editor → document → field list (edit mode: field list first).
           Desktop: editor + list on one side, document on the other. */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
@@ -155,6 +166,8 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
               onEdit={editField}
               onAdd={addField}
               onDelete={deleteField}
+              duplicates={form.duplicates}
+              onCompare={setCompare}
               saving={listSaving}
               error={listError}
             />

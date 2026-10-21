@@ -30,6 +30,25 @@ class FieldResponse(BaseModel):
     created_at: datetime | None = None
 
 
+class CommitmentDuplicate(BaseModel):
+    """A commitment number of this form that another form has too — with where it is on each page."""
+
+    field_id: int
+    value: str
+    other_form_id: int
+    other_field_id: int
+    other_source_file: str
+    other_page_number: int
+    other_status: str
+    other_value: str
+    # The other form's field box (normalized, 0..1), for the side-by-side view.
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
+    box_source: str | None = None
+
+
 class FormResponse(BaseModel):
     id: int
     source_file: str
@@ -41,6 +60,7 @@ class FormResponse(BaseModel):
     error: str | None = None
     uploaded_at: datetime | None = None
     fields: list[FieldResponse] = Field(default_factory=list)
+    duplicates: list[CommitmentDuplicate] = Field(default_factory=list)
 
 
 class FormSources(BaseModel):

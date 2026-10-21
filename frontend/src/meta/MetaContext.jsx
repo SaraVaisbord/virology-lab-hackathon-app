@@ -12,7 +12,8 @@ function buildMeta(raw) {
     ...raw,
     fieldLabel: (key) => raw.fields.find((field) => field.key === key)?.label ?? raw.form_columns[key] ?? key,
     isMultiValue: (key) => raw.fields.some((field) => field.key === key && field.multi_value),
-    isNumeric: (key) => raw.fields.some((field) => field.key === key && field.numeric),
+    fieldKind: (key) => raw.fields.find((field) => field.key === key)?.kind ?? 'text',
+    datePattern: new RegExp(raw.date_pattern),
     isPendingForm: (status) => raw.pending_form_statuses.includes(status),
     needsReview: (field) => raw.review_field_statuses.includes(field?.status),
   }

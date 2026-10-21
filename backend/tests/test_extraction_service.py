@@ -174,17 +174,17 @@ def test_llm_and_ocr_label_disagree_on_the_field_is_a_conflict():
 
 
 def test_local_only_value_is_unverified_until_a_second_source_agrees():
-    fields = build_fields(None, [], SENDERS, local_candidates=[_local("central_number", "12043017", label="מקרה:")])
+    fields = build_fields(None, [], SENDERS, local_candidates=[_local("central_number", "12043017", label="מרכזי:")])
     (alone,) = _by_name(fields, "central_number")
     assert alone["status"] == "unverified" and alone["reason"] == REASONS["local_only"]
     assert alone["llm_value"] is None and alone["ocr_value"] == "12043017" and alone["box_source"] == "ocr"
 
-    with_barcode = build_fields(None, [_barcode("12043017")], SENDERS, local_candidates=[_local("central_number", "12043017", label="מקרה:")])
+    with_barcode = build_fields(None, [_barcode("12043017")], SENDERS, local_candidates=[_local("central_number", "12043017", label="מרכזי:")])
     assert _by_name(with_barcode, "central_number")[0]["status"] == "verified"  # OCR label + OCR & barcode readings
 
 
 def test_low_confidence_ocr_only_value_is_uncertain():
-    local = [_local("central_number", "12043017", label="מקרה:", confidence=40)]
+    local = [_local("central_number", "12043017", label="מרכזי:", confidence=40)]
     (field,) = _by_name(build_fields(None, [], SENDERS, local_candidates=local), "central_number")
     assert field["status"] == "uncertain"
 
@@ -262,7 +262,7 @@ def test_local_only_mode_never_calls_the_llm(app_env, monkeypatch, fake_local_so
     from db import queries
     from services import extraction_service, upload_service
 
-    fake_local_sources["local"] = [_local("central_number", "12043017", label="מקרה:")]
+    fake_local_sources["local"] = [_local("central_number", "12043017", label="מרכזי:")]
     monkeypatch.setattr(ai_extractor, "extract_from_image", lambda *a: pytest.fail("LLM must not be called"))
     form_id, form = _uploaded_form(queries, upload_service)
     extraction_service.extract_for_form(form, use_llm=False)
@@ -383,3 +383,42 @@ def test_unlabeled_ocr_reading_confirms_the_value_but_not_the_field():
     (field,) = _by_name(build_fields(llm, [], SENDERS, ocr_numbers=ocr_numbers), "central_number")
     assert field["evidence"]["sources"] == ["llm", "ocr"] and field["evidence"]["agreement"] == "agree"
     assert field["status"] == "unverified" and field["reason"] == REASONS["assignment_llm_only"]
+
+
+# ── lab definitions (2026-10-20) ─────────────────────────────────────────────
+
+
+def _anchored_date(value, central):
+    return {**_local("received_date", value, label=f"מתחת למספר המרכזי {central}"), "anchor": "central_number"}
+
+
+def test_different_dates_under_central_numbers_go_to_the_lab_worker():
+    first = (date.today() - timedelta(days=3)).strftime("%d/%m/%Y")
+    second = (date.today() - timedelta(days=9)).strftime("%d/%m/%Y")
+    llm = {"received_date": [{"value": first, "confidence": "high"}]}
+    local = [_anchored_date(first, "111"), {**_anchored_date(second, "222"), "rank": 1}]
+    (field,) = _by_name(build_fields(llm, [], SENDERS, local_candidates=local), "received_date")
+    assert field["status"] == "uncertain"  # LLM + OCR agree on one date, but another central number has another date
+    assert REASONS["received_dates_differ"].format(dates=f"{first}, {second}") in field["reason"]
+    assert field["evidence"]["alternatives"] == [second]
+
+
+def test_one_date_under_the_central_number_can_verify():
+    day = (date.today() - timedelta(days=3)).strftime("%d/%m/%Y")
+    llm = {"received_date": [{"value": day, "confidence": "high"}]}
+    (field,) = _by_name(build_fields(llm, [], SENDERS, local_candidates=[_anchored_date(day, "111")]), "received_date")
+    assert field["status"] == "verified" and field["evidence"]["ocr"]["anchor"] == "central_number"
+
+
+def test_sample_label_supports_a_commitment_only_on_leumit_forms():
+    llm = {"commitment_number": [{"value": "7712345", "confidence": "high", "label": "מספר דגימה"}]}
+    (leumit,) = _by_name(build_fields(llm, [], SENDERS, form_type="leumit"), "commitment_number")
+    (other,) = _by_name(build_fields(llm, [], SENDERS), "commitment_number")
+    assert leumit["evidence"]["assignment"]["label_supports"] is True
+    assert other["evidence"]["assignment"]["label_supports"] is None
+
+
+def test_case_label_no_longer_points_to_the_central_number():
+    llm = {"commitment_number": [{"value": "12043017", "confidence": "high", "label": "מקרה"}]}
+    (field,) = _by_name(build_fields(llm, [], SENDERS), "commitment_number")
+    assert field["status"] != "conflict"

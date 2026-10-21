@@ -37,8 +37,8 @@ def _extract(views, words, barcodes=None):
 
 
 def test_value_left_of_label_on_the_same_line(views):
-    # RTL: "מקרה: 12043017" — the label is on the right, the value to its left
-    pairs, _ = _extract(views, [_word("מקרה:", 0.50, 0.30), _word("12043017", 0.38, 0.30, 0.1)])
+    # RTL: "מרכזי: 12043017" — the label is on the right, the value to its left
+    pairs, _ = _extract(views, [_word("מרכזי:", 0.50, 0.30), _word("12043017", 0.38, 0.30, 0.1)])
     assert pairs == {("central_number", "12043017")}
 
 
@@ -48,13 +48,13 @@ def test_value_below_the_label(views):
 
 
 def test_glued_label_and_number_with_ocr_misread(views):
-    # OCR read "מקרה" as "מסרה" and glued it to the number
-    pairs, _ = _extract(views, [_word("מסרה:12043017", 0.23, 0.29, 0.13)])
+    # OCR read "מרכזי" as "מרכדי" and glued it to the number
+    pairs, _ = _extract(views, [_word("מרכדי:12043017", 0.23, 0.29, 0.13)])
     assert pairs == {("central_number", "12043017")}
 
 
 def test_fuzzy_matching_rejects_other_words():
-    assert _matches("מסרה", "מקרה", S)  # one substituted letter
+    assert _matches("מרכדי", "מרכזי", S)  # one substituted letter
     assert _matches("ההתחייבות", "התחייבות", S)  # Hebrew prefix
     assert not _matches("מרכזית", "מרכזי", S)  # feminine form — a pharmacy, not "central number"
     assert not _matches("מרכז", "מרכזי", S)  # "centre"
@@ -76,7 +76,7 @@ def test_instruction_line_is_not_a_label(views):
 
 
 def test_negative_labels_block_catalog_and_phone_numbers(views):
-    words = [_word("מקרה:", 0.50, 0.30), _word('מק"ט', 0.44, 0.30, 0.04), _word("12017572", 0.33, 0.30, 0.1),
+    words = [_word("מרכזי:", 0.50, 0.30), _word('מק"ט', 0.44, 0.30, 0.04), _word("12017572", 0.33, 0.30, 0.1),
              _word("טל':", 0.50, 0.50), _word("03-5078369", 0.38, 0.50, 0.1)]
     pairs, result = _extract(views, words)
     assert pairs == set()
@@ -115,3 +115,45 @@ def test_normalize_date():
     assert normalize_date("27.8.26") == "27/08/2026"
     assert normalize_date("27-08-2026") == "27/08/2026"
     assert normalize_date("32.08.26") is None
+
+
+# ── lab definitions (2026-10-20): row key, Leumit, central number, received date ──
+
+
+def _recent(days=10):
+    return (date.today() - timedelta(days=days)).strftime("%d/%m/%Y")
+
+
+def test_case_number_is_not_a_central_number(views):
+    # "מקרה" is the referring institution's case number — the lab doesn't use it; the number stays unassigned
+    pairs, result = _extract(views, [_word("מקרה:", 0.50, 0.30), _word("12043017", 0.38, 0.30, 0.1)])
+    assert pairs == set()
+    assert any(n["value"] == "12043017" for n in result.unassigned_numbers)
+
+
+def test_requisition_number_is_a_commitment_but_a_heading_is_not(views):
+    pairs, _ = _extract(views, [_word("מס'", 0.56, 0.30, 0.04), _word("דרישה:", 0.50, 0.30), _word("58153", 0.40, 0.30, 0.08)])
+    assert pairs == {("commitment_number", "58153")}
+    heading, _ = _extract(views, [_word("דרישה", 0.56, 0.30), _word("לבדיקה", 0.48, 0.30), _word("58153", 0.38, 0.30, 0.08)])
+    assert heading == set()
+
+
+def test_sample_label_is_a_commitment_only_on_leumit_forms(views):
+    words = [_word("דגימה:", 0.50, 0.30), _word("7712345", 0.40, 0.30, 0.08)]
+    leumit_pairs, leumit = _extract(views, [_word("לאומית", 0.80, 0.05)] + words)
+    assert leumit.form_type == "leumit"
+    assert leumit_pairs == {("commitment_number", "7712345")}
+    other_pairs, other = _extract(views, words)
+    assert other.form_type is None and other_pairs == set()
+
+
+def test_received_date_is_the_one_under_the_central_number(views):
+    under, elsewhere = _recent(5), _recent(30)
+    _, result = _extract(views, [
+        _word("מרכזי:", 0.50, 0.30), _word("12043017", 0.38, 0.30, 0.1),
+        _word(under, 0.40, 0.34, 0.1),  # stamped / handwritten right under the sticker
+        _word("תאריך:", 0.50, 0.70), _word(elsewhere, 0.38, 0.70, 0.1),  # another date on the form
+    ])
+    best = next(c for c in result.candidates if c.field == "received_date" and c.rank == 0)
+    assert best.value == under and best.anchor == "central_number" and "12043017" in best.label
+    assert any(c.field == "received_date" and c.value == elsewhere for c in result.candidates)  # kept as an option

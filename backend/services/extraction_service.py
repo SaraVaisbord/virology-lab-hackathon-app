@@ -15,6 +15,8 @@ Verification rules (labels/thresholds in db/constants.py and config.py):
   field, a barcode one character off — is a `conflict`: the number is kept, never force-assigned.
 - A single source (LLM alone, OCR alone) leaves the value `unverified`; failed format checks make it `uncertain`.
   A high model confidence alone never makes a value verified. Every undecided value goes to the lab worker.
+- The received date is the one under the central number; different dates under different central numbers are
+  never decided by the machine — the lab worker picks one.
 """
 
 from __future__ import annotations
@@ -40,12 +42,13 @@ from db.constants import (
     BARCODE_FIELDS,
     CONFIDENCE_LEVELS,
     EXTRACTION_ERRORS,
-    FIELD_LABEL_KEYWORDS,
     FIELD_LABELS,
     FIELDS,
+    FORM_TYPES,
     MULTI_VALUE_FIELDS,
     OCR_UNAVAILABLE_REASON,
     REASONS,
+    label_keywords,
 )
 from preprocessing import preprocess
 from services.forms_service import resolve_image_path
@@ -122,13 +125,14 @@ def match_sender(value: str, known_senders: list[str]) -> str | None:
     return max(matches, key=len) if matches else None
 
 
-def _label_verdict(field_name: str, label: str) -> tuple[bool | None, str | None]:
-    """Does the label next to the value support this field? Returns (supports, other_field_it_points_to)."""
+def _label_verdict(field_name: str, label: str, keywords: dict[str, tuple[str, ...]]) -> tuple[bool | None, str | None]:
+    """Does the label next to the value support this field? Returns (supports, other_field_it_points_to).
+    keywords: label words per field for this form type (see label_keywords)."""
     if not label:
         return None, None
-    if any(word in label for word in FIELD_LABEL_KEYWORDS.get(field_name, ())):
+    if any(word in label for word in keywords.get(field_name, ())):
         return True, None
-    for other, words in FIELD_LABEL_KEYWORDS.items():
+    for other, words in keywords.items():
         if other != field_name and any(word in label for word in words):
             return False, other
     return None, None
@@ -198,7 +202,7 @@ def _evaluate(field_name: str, key: str, llm: dict[str, Any] | None, local: dict
     agreement = "conflict" if conflicts else "agree" if len(readings) >= 2 else "insufficient"
 
     # Field assignment evidence: the LLM's label, the OCR label next to the value, other fields claiming it.
-    label_supports, label_other = _label_verdict(field_name, llm_label)
+    label_supports, label_other = _label_verdict(field_name, llm_label, ctx["label_keywords"])
     if label_other:
         conflicts.append(REASONS["label_points_elsewhere"].format(label=llm_label, other=FIELD_LABELS[label_other]))
     also_claimed_by: list[str] = []
@@ -249,7 +253,7 @@ def _evaluate(field_name: str, key: str, llm: dict[str, Any] | None, local: dict
         **(box or {}),
         "evidence": {
             "llm": {"value": llm_raw, "confidence": llm_confidence, "label": llm_label or None, "reason": llm.get("reason") or None, "box": llm_box} if llm else None,
-            "ocr": ({key_: local[key_] for key_ in ("raw", "source", "confidence", "label", "distance")} if local
+            "ocr": ({key_: local.get(key_) for key_ in ("raw", "source", "confidence", "label", "distance", "anchor")} if local
                     else {"raw": ocr_seen_unlabeled, "source": "ocr", "confidence": None, "label": None, "distance": None} if ocr_seen_unlabeled
                     else None),
             "barcode_candidates": barcodes,
@@ -288,6 +292,15 @@ def _not_found(field_name: str, page: int | None) -> dict[str, Any]:
 _STATUS_PREFERENCE = {"verified": 0, "unverified": 1, "uncertain": 2, "conflict": 3}
 
 
+def form_type_of(ocr_result: dict[str, Any] | None, llm_result: dict[str, Any] | None) -> str | None:
+    """The health-fund form type: recognised on the page by the OCR, otherwise as reported by the LLM."""
+    for result in (ocr_result, llm_result):
+        form_type = (result or {}).get("form_type")
+        if form_type in FORM_TYPES:
+            return form_type
+    return None
+
+
 def build_fields(
     llm_result: dict[str, Any] | None,
     barcodes: list[dict[str, Any]],
@@ -295,9 +308,11 @@ def build_fields(
     page: int | None = None,
     local_candidates: list[dict[str, Any]] | None = None,
     ocr_numbers: list[dict[str, Any]] | None = None,
+    form_type: str | None = None,
 ) -> list[dict[str, Any]]:
     """Merge LLM candidates, local (OCR/barcode) candidates and barcodes into field rows (one row per value).
-    ocr_numbers: numbers the OCR read without a label (they confirm readings, not assignments)."""
+    ocr_numbers: numbers the OCR read without a label (they confirm readings, not assignments).
+    form_type: some labels exist only on one fund's forms (Leumit "דגימה" = commitment number)."""
     llm_result = llm_result or {}
     local_candidates = local_candidates or []
     ocr_unlabeled = {_digits(n["value"]): n["raw"] for n in ocr_numbers or [] if n.get("source", "ocr").startswith("ocr")}
@@ -318,6 +333,7 @@ def build_fields(
         "llm_claims": llm_claims,
         "local_claims": local_claims,
         "ocr_numbers": ocr_unlabeled,
+        "label_keywords": label_keywords(form_type),
     }
 
     fields: list[dict[str, Any]] = []
@@ -347,6 +363,12 @@ def build_fields(
             if best["status"] != "verified":
                 best["status"] = "uncertain" if best["status"] != "conflict" else "conflict"
                 best["reason"] = " · ".join(filter(None, [best.get("reason"), f"נמצאו ערכים נוספים: {', '.join(alternatives)}"]))
+        # Several central numbers with different dates under them: not the machine's call, even if one is verified.
+        anchored = [e["value"] for e in entries if ((e["evidence"].get("ocr") or {}).get("anchor"))]
+        if len(set(anchored)) > 1:
+            if best["status"] != "conflict":
+                best["status"] = "uncertain"
+            best["reason"] = " · ".join(filter(None, [best.get("reason"), REASONS["received_dates_differ"].format(dates=", ".join(anchored))]))
         fields.append({**best, "page": page})
     return fields
 
@@ -456,9 +478,10 @@ def extract_for_form(form: dict[str, Any], provider: str = "gemini", use_llm: bo
             raise
         queries.save_source_results(form_id, llm_result=llm_result)
 
+    form_type = form_type_of(ocr_result, llm_result)
     fields = build_fields(llm_result, barcode_result["items"], known_senders, page=page, local_candidates=ocr_result["candidates"],
-                          ocr_numbers=ocr_result.get("unassigned_numbers"))
-    queries.save_extraction(form_id, fields)
+                          ocr_numbers=ocr_result.get("unassigned_numbers"), form_type=form_type)
+    queries.save_extraction(form_id, fields, form_type=form_type)
 
 
 def reverify_form(form_id: int) -> bool:
@@ -471,8 +494,10 @@ def reverify_form(form_id: int) -> bool:
     local = (sources.get("ocr_result") or {}).get("candidates", [])
     known_senders = [name for name, _kind in queries.list_senders()]
     ocr_numbers = (sources.get("ocr_result") or {}).get("unassigned_numbers", [])
+    form_type = form_type_of(sources.get("ocr_result"), sources.get("llm_result"))
     queries.save_extraction(form_id, build_fields(sources.get("llm_result"), barcodes, known_senders, page=form["page_number"],
-                                                  local_candidates=local, ocr_numbers=ocr_numbers))
+                                                  local_candidates=local, ocr_numbers=ocr_numbers, form_type=form_type),
+                            form_type=form_type)
     return True
 
 

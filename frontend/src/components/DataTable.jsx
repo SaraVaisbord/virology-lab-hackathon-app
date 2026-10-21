@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, Eye, FileText, Loader2, Pencil, RotateCcw, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, Eye, FileText, Loader2, Pencil, RotateCcw, X } from 'lucide-react'
 import StatusBadge from './ui/StatusBadge'
 import { useMeta } from '../meta/MetaContext'
 import { useClickOutside } from '../hooks/useClickOutside'
@@ -52,18 +52,21 @@ function FieldValues({ form, fieldKey, rows, onOpenField }) {
       {values.map((row) => {
         const text = fieldDisplayValue(row) || meta.field_statuses[row.status]
         const review = meta.needsReview(row)
+        const duplicate = (form.duplicates ?? []).find((dup) => dup.field_id === row.id)
+        const title = review ? row.reason || meta.field_statuses[row.status] : meta.field_statuses[row.status]
         return (
           <button
             key={row.id}
             type="button"
             onClick={() => onOpenField(form, row.id)}
-            title={review ? row.reason || meta.field_statuses[row.status] : meta.field_statuses[row.status]}
+            title={duplicate ? `${title} · מופיע גם ב־${duplicate.other_source_file} עמ' ${duplicate.other_page_number}` : title}
             className={
               review
                 ? 'uncertain-cell max-w-[12rem] truncate text-right'
                 : `max-w-[12rem] truncate rounded-full px-2 py-0.5 text-right text-sm text-gray-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-slate-800 ${meta.isMultiValue(fieldKey) ? 'border border-slate-200 dark:border-slate-700' : ''}`
             }
           >
+            {duplicate && <Copy size={11} className="me-1 inline text-orange-600 dark:text-orange-300" aria-label="מופיע גם בטופס אחר" />}
             {text}
           </button>
         )

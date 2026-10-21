@@ -3,12 +3,14 @@ local_extractor.py - Deterministic, local field extraction (no LLM, no tokens).
 
 Pipeline for one preprocessed page (see preprocessing.py):
   1. OCR the clean print layer (labels, printed numbers) → words with boxes and confidence.
-  2. Split glued tokens ("מקרה:12043017" → label "מקרה:" + number "12043017").
-  3. Find label lines from LOCAL_LABEL_LEXICON (fuzzy: one wrong letter allowed — "מסרה" still matches "מקרה").
+  2. Split glued tokens ("מרכזי:12043017" → label "מרכזי:" + number "12043017").
+  3. Find label lines from LOCAL_LABEL_LEXICON (fuzzy: one wrong letter allowed — "מרכדי" still matches "מרכזי").
+     The health fund is recognised from the page (FORM_TYPE_MARKERS) — some labels exist only on its forms.
   4. Collect value tokens (numbers / dates) and drop those on lines with negative labels (catalog no., phone…).
   5. Pair every label with the nearest suitable value: on the same line to its LEFT (Hebrew reads right-to-left),
      or right below it. Barcodes next to a label are candidates too.
   6. When a label has no value, OCR just the area next to it again, digits only, on several image variants.
+  7. The received date is the one written right under the central number: such dates are candidates first.
 
 Every candidate carries its evidence: source, OCR confidence, the label text and box, and the distance to it.
 Coordinates are normalized to the page (0..1). Unpaired numbers are kept (never silently dropped).
@@ -24,7 +26,17 @@ import cv2
 
 import config
 import ocr_reader
-from db.constants import HEBREW_PREFIXES, LOCAL_LABEL_LEXICON, LOCAL_NEGATIVE_LABELS, MULTI_VALUE_FIELDS
+from db.constants import (
+    DATE_PATTERN,
+    FIELD_KINDS,
+    FORM_TYPE_LABEL_KEYWORDS,
+    FORM_TYPE_MARKERS,
+    HEBREW_PREFIXES,
+    LOCAL_LABEL_LEXICON,
+    LOCAL_NEGATIVE_LABELS,
+    MULTI_VALUE_FIELDS,
+    RECEIVED_DATE_ANCHOR_LABEL,
+)
 from ocr_reader import OcrWord
 from preprocessing import PageViews
 from validators import israeli_id_is_valid
@@ -34,7 +46,7 @@ from validators import israeli_id_is_valid
 class LocalExtractionSettings:
     # Words OCR is less sure about than this are ignored (Tesseract confidence 0..100).
     min_word_confidence: float = 35
-    # One wrong letter is tolerated in label keywords of at least this length ("מסרה" → "מקרה").
+    # One wrong letter is tolerated in label keywords of at least this length ("מרכדי" → "מרכזי").
     fuzzy_min_keyword_length: int = 4
     # Two words are on the same line when their vertical centres differ by less than this share of their height.
     same_line_tolerance: float = 0.6
@@ -56,18 +68,21 @@ class LocalExtractionSettings:
     targeted_upscale: float = 2.0
     targeted_whitelist: str = "0123456789./-"
     targeted_min_confidence: float = 50
-    # Barcode stickers: their own label ("מקרה:") is small and often missed by the full-page OCR, so the area
+    # Barcode stickers: their own label ("מרכזי:") is small and often missed by the full-page OCR, so the area
     # around every barcode is OCR'd again (Hebrew + digits). Window = barcode box grown by these factors.
     sticker_grow_x: float = 1.5  # times the barcode width, on each side
     sticker_grow_y: float = 3.0  # times the barcode height, above and below
+    # Received date under the central number: at most this far below it (page heights) and this far off its
+    # horizontal centre (page widths) — the "התקבל" stamp / handwritten date sits right beneath the sticker.
+    anchor_max_gap: float = 0.08
+    anchor_max_x_offset: float = 0.15
 
 
 DEFAULT_SETTINGS = LocalExtractionSettings()
 
-_DATE = re.compile(r"(?<!\d)(\d{1,2})[./\-](\d{1,2})[./\-](\d{2}|\d{4})(?!\d)")
-_GLUED = re.compile(r"^(\D{2,}?)[:׃\s]*(\d[\d./\-]{3,})$")  # "מקרה:12043017"
+_DATE = re.compile(DATE_PATTERN)
+_GLUED = re.compile(r"^(\D{2,}?)[:׃\s]*(\d[\d./\-]{3,})$")  # "מרכזי:12043017"
 _PHONE = re.compile(r"^\+?\d{1,3}-\d|^0\d{1,2}-\d{6,8}$|^\+972")
-_FIELD_KIND = {"commitment_number": "number", "central_number": "number", "id_number": "id", "received_date": "date"}
 
 
 @dataclass
@@ -123,6 +138,7 @@ class Candidate:
     label_box: dict
     distance: float  # geometric distance + weak-label penalty (lower is better)
     rank: int = 0  # 0 = best candidate for its field; single-value fields use rank 0, the rest are alternatives
+    anchor: str | None = None  # "central_number": a received date found right under a central number
 
 
 @dataclass
@@ -130,9 +146,11 @@ class LocalResult:
     candidates: list[Candidate] = field(default_factory=list)
     labels: list[Label] = field(default_factory=list)
     unassigned_numbers: list[dict] = field(default_factory=list)
+    form_type: str | None = None
 
     def as_dict(self) -> dict:
         return {
+            "form_type": self.form_type,
             "candidates": [asdict(c) for c in self.candidates],
             "labels": [{"field": l.field, "text": l.text, "box": asdict(l.box)} for l in self.labels],
             "unassigned_numbers": self.unassigned_numbers,
@@ -158,7 +176,7 @@ def _clean_word(text: str) -> str:
 
 def _matches(word: str, keyword: str, settings: LocalExtractionSettings) -> bool:
     """Whole-word match, optionally with one Hebrew prefix letter ("ההתחייבות", "מתאריך"), or the same length
-    with ONE substituted letter (an OCR misread such as "מסרה" for "מקרה"). No substring matches: "מרכזית"
+    with ONE substituted letter (an OCR misread such as "מרכדי" for "מרכזי"). No substring matches: "מרכזית"
     (feminine, e.g. a central pharmacy) must not match "מרכזי", nor "מרכז" (centre)."""
     word = _clean_word(word)
     keyword = _clean_word(keyword)
@@ -220,19 +238,31 @@ def _group_lines(tokens: list[Token], settings: LocalExtractionSettings) -> list
     return lines
 
 
-def _find_labels(lines: list[list[Token]], settings: LocalExtractionSettings) -> list[Label]:
+def detect_form_type(texts: list[str], settings: LocalExtractionSettings | None = None) -> str | None:
+    """The form type whose marker word (FORM_TYPE_MARKERS) is on the page — None when none or several are."""
+    settings = settings or DEFAULT_SETTINGS
+    found = {form_type for form_type, markers in FORM_TYPE_MARKERS.items()
+             if any(_matches(text, marker, settings) for text in texts for marker in markers)}
+    return found.pop() if len(found) == 1 else None
+
+
+def _find_labels(lines: list[list[Token]], settings: LocalExtractionSettings, form_type: str | None = None) -> list[Label]:
+    type_keywords = FORM_TYPE_LABEL_KEYWORDS.get(form_type or "", {})
     labels = []
     for line in lines:
         texts = [t.text for t in line]
         for field_name, spec in LOCAL_LABEL_LEXICON.items():
             hits = [t for t in line if any(_matches(t.text, k, settings) for k in spec["keywords"])]
-            if not hits:
+            # Labels of this form type only (Leumit "דגימה"): the page already says which form it is.
+            type_hits = [t for t in line if any(_matches(t.text, k, settings) for k in type_keywords.get(field_name, ()))]
+            if not hits and not type_hits:
                 continue
             if any(_matches(text, word, settings) for text in texts for word in spec["exclude_if_line_has"]):
                 continue
             required = [t for t in line if any(_clean_word(t.text) == w.strip("'׳") or t.text.startswith(w) for w in spec["requires_one_of"])]
-            if spec["requires_one_of"] and not required:
+            if not type_hits and spec["requires_one_of"] and not required:
                 continue
+            hits = hits + type_hits
             box = hits[0].box
             for token in hits[1:] + required:
                 box = box.union(token.box)
@@ -254,7 +284,7 @@ def _value_for_field(token: Token, field_name: str, settings: LocalExtractionSet
     """The normalized value if the token can be this field's value, else None."""
     if token.negative or _PHONE.search(token.text):
         return None
-    kind = _FIELD_KIND[field_name]
+    kind = FIELD_KINDS[field_name]
     if kind == "date":
         value = normalize_date(token.text)
         if value is None:
@@ -319,6 +349,28 @@ def _pair(labels: list[Label], tokens: list[Token], settings: LocalExtractionSet
         candidates.append(Candidate(label.field, value, token.text, token.source, token.confidence,
                                     asdict(token.box), label.text, asdict(label.box), round(distance, 4)))
     return candidates
+
+
+def _dates_under_central(candidates: list[Candidate], tokens: list[Token], settings: LocalExtractionSettings) -> list[Candidate]:
+    """The received date is written (or stamped "התקבל") right under the central number — one per central number."""
+    found = []
+    for central in (c for c in candidates if c.field == "central_number"):
+        anchor = Box(**central.box)
+        options = []
+        for token in tokens:
+            value = _value_for_field(token, "received_date", settings)
+            if value is None:
+                continue
+            gap = token.box.y - anchor.bottom
+            x_offset = abs((token.box.x + token.box.width / 2) - (anchor.x + anchor.width / 2))
+            if -anchor.height * 0.3 <= gap <= settings.anchor_max_gap and x_offset <= settings.anchor_max_x_offset:
+                options.append((max(gap, 0.0) * 1.41 + x_offset, token, value))  # 1.41 ≈ A4 height/width
+        if options:
+            distance, token, value = min(options, key=lambda option: option[0])
+            found.append(Candidate("received_date", value, token.text, token.source, token.confidence, asdict(token.box),
+                                   RECEIVED_DATE_ANCHOR_LABEL.format(value=central.value), central.box, round(distance, 4),
+                                   anchor="central_number"))
+    return found
 
 
 # ── targeted OCR next to a label ─────────────────────────────────────────────
@@ -422,11 +474,12 @@ def extract(views: PageViews, barcodes: list[dict] | None = None, words: list[Oc
     words = read_page_words(views) if words is None else words
     words = words + _sticker_words(views, barcodes or [], settings)
     tokens = _tokens_from_words(words, settings)
+    form_type = detect_form_type([t.text for t in tokens], settings)
     lines = _group_lines(tokens, settings)
     _mark_negative(lines)
     # The two OCR passes often both read the same printed label — keep one, or it would claim two values.
     labels: list[Label] = []
-    for label in _find_labels(lines, settings):
+    for label in _find_labels(lines, settings, form_type):
         if not any(l.field == label.field and _overlap(l.box, label.box) > 0.3 for l in labels):
             labels.append(label)
 
@@ -443,13 +496,15 @@ def extract(views: PageViews, barcodes: list[dict] | None = None, words: list[Oc
             continue
         extra = _pair([label], _targeted_tokens(views, label, settings), settings)
         candidates.extend(extra)
+    candidates.extend(_dates_under_central(candidates, tokens, settings))
 
-    # Rank candidates per field (best first). Single-value fields use rank 0; the rest stay as alternatives.
-    # The same value found twice (two OCR passes, or OCR + barcode) is one reading: keep its best occurrence.
+    # Rank candidates per field (best first; a date under the central number before any labelled date). Single-value
+    # fields use rank 0; the rest stay as alternatives. The same value found twice (two OCR passes, or OCR + barcode)
+    # is one reading: keep its best occurrence.
     ranked: list[Candidate] = []
     for field_name in dict.fromkeys(c.field for c in candidates):
         best_per_value: dict[str, Candidate] = {}
-        for c in sorted((c for c in candidates if c.field == field_name), key=lambda c: c.distance):
+        for c in sorted((c for c in candidates if c.field == field_name), key=lambda c: (c.anchor is None, c.distance)):
             best_per_value.setdefault(c.value, c)
         for rank, c in enumerate(best_per_value.values()):
             c.rank = 0 if field_name in MULTI_VALUE_FIELDS else rank
@@ -465,4 +520,4 @@ def extract(views: PageViews, barcodes: list[dict] | None = None, words: list[Oc
             continue
         seen.add((value, t.source))
         unassigned.append({"value": value, "raw": t.text, "source": t.source, "box": asdict(t.box), "confidence": t.confidence})
-    return LocalResult(candidates=candidates, labels=labels, unassigned_numbers=unassigned)
+    return LocalResult(candidates=candidates, labels=labels, unassigned_numbers=unassigned, form_type=form_type)

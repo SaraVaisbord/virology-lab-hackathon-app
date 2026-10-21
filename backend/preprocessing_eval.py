@@ -32,10 +32,12 @@ from PIL import Image
 
 import barcode_reader
 import ocr_reader
+from db.constants import LOCAL_LABEL_LEXICON
 from preprocessing import preprocess
 
 MIN_CONFIDENCE = 60
-LABEL_KEYWORDS = ("התחייבות", "מקרה", "מרכזי", "תאריך", "התקבל", "מ.ז", "ת.ז", 'ת"ז')
+# The label words the local extractor looks for (one source: the label lexicon).
+LABEL_KEYWORDS = tuple(dict.fromkeys(word for spec in LOCAL_LABEL_LEXICON.values() for word in spec["keywords"]))
 REFERENCE_FIELDS = ("central_number", "commitment_number", "id_number")
 OLD_RENDER_DPI, OLD_MAX_SIDE = 200, 2000
 

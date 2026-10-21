@@ -15,9 +15,27 @@ FIELD_LABELS = {
 }
 FIELDS = tuple(FIELD_LABELS)
 
+# What kind of value each field holds: how values are validated locally, and which numbers found on the page are
+# offered to the lab worker as options for the field (numbers for number/id fields, dates for date fields).
+FIELD_KINDS = {
+    "first_name": "text",
+    "last_name": "text",
+    "id_number": "id",
+    "central_number": "number",
+    "commitment_number": "number",
+    "received_date": "date",
+    "sender": "text",
+}
+# A date as written on the forms: D/M/YY .. DD.MM.YYYY (separators / . -). Also sent to the frontend via /meta.
+DATE_PATTERN = r"(?<!\d)(\d{1,2})[./\-](\d{1,2})[./\-](\d{2}|\d{4})(?!\d)"
+
 # LLM page inventory (all_numbers): how each number appears on the page, and the "not assigned" marker.
 INVENTORY_KINDS = ("barcode", "sticker", "printed", "handwritten")
 UNASSIGNED = "none"
+
+# The export has one row per commitment: the commitment number is the row key (the lab's definition). The same
+# number on two forms is flagged for the lab worker (usually one form uploaded twice).
+ROW_KEY_FIELD = "commitment_number"
 
 # Fields that may legitimately hold several values on one page.
 MULTI_VALUE_FIELDS = frozenset({"central_number", "commitment_number"})
@@ -31,24 +49,41 @@ BARCODE_FIELDS = frozenset({"central_number", "commitment_number", "id_number"})
 AMBIGUOUS_NUMBER_FIELDS = frozenset({"central_number", "commitment_number"})
 
 # Words that, when they appear in the label next to a value, indicate which field it belongs to.
+# Commitment number = the row key of the export; also written as "דרישה". Central number = the LAB's internal
+# number given on receipt (sticker "מרכזי"), never a number of the health fund or the referring institution.
 FIELD_LABEL_KEYWORDS = {
-    "commitment_number": ("התחייבות",),
-    "central_number": ("מרכזי", "מקרה"),
+    "commitment_number": ("התחייבות", "דרישה"),
+    "central_number": ("מרכזי",),
     "id_number": ('ת"ז', "ת.ז", "מ.ז", "זהות"),
 }
+
+# Health-fund form types recognised from a word printed on the page. Only funds whose name can't be mistaken for
+# an ordinary word are listed ("כללית" also means "general", e.g. "רפואה כללית").
+FORM_TYPE_MARKERS = {"leumit": ("לאומית",)}
+# Labels a field has only on one form type. On Leumit forms the commitment number is labelled "דגימה"; on any other
+# form that word names a sample/test number, which is NOT the commitment.
+FORM_TYPE_LABEL_KEYWORDS = {"leumit": {"commitment_number": ("דגימה",)}}
+
+
+def label_keywords(form_type: str | None) -> dict[str, tuple[str, ...]]:
+    """FIELD_LABEL_KEYWORDS plus the labels specific to this form type."""
+    extra = FORM_TYPE_LABEL_KEYWORDS.get(form_type or "", {})
+    return {name: words + extra.get(name, ()) for name, words in FIELD_LABEL_KEYWORDS.items()}
+
 
 # Label lexicon for the local (OCR) extractor. A printed line is a label for a field when it contains one of
 # `keywords` and none of `exclude_if_line_has` (e.g. the title "טופס התחייבות" is not a commitment-number label).
 # `requires_one_of`: at least one of these words must be on the line too (e.g. "מספר התחייבות", not just "התחייבות").
 LOCAL_LABEL_LEXICON = {
     "commitment_number": {
-        "keywords": ("התחייבות", "ההתחייבות"),
-        # "מספר התחייבות", or a form title "טופס התחייבות ... מס' 58153" — both carry a number word.
+        "keywords": ("התחייבות", "ההתחייבות", "דרישה"),
+        # "מספר התחייבות" / "מס' דרישה", or a form title "טופס התחייבות ... מס' 58153" — all carry a number word
+        # (a heading such as "דרישה לבדיקה" doesn't). Form-type labels (Leumit "דגימה") don't need one.
         "requires_one_of": ("מספר", "מס'", "מס", "מס׳"),
         # ...but not instructions such as "נא לציין את מספר ההתחייבות" or payment notes.
         "exclude_if_line_has": ("לציין", "תשלום", "לתשלום"),
     },
-    "central_number": {"keywords": ("מקרה", "מרכזי"), "requires_one_of": (), "exclude_if_line_has": ()},
+    "central_number": {"keywords": ("מרכזי",), "requires_one_of": (), "exclude_if_line_has": ()},
     "id_number": {"keywords": ('ת"ז', "ת.ז", "מ.ז", "זהות"), "requires_one_of": (), "exclude_if_line_has": ()},
     "received_date": {
         # A page has many dates; "ת.קבלה" / "קבלה" / "התקבל" (strong) say "received", plain "תאריך" (weak) doesn't.
@@ -131,7 +166,12 @@ REASONS = {
     "unknown_sender": "הגורם השולח לא נמצא ברשימת השולחים המוכרים",
     "low_confidence": "רמת ביטחון נמוכה בזיהוי הערך",
     "not_found": "השדה לא נמצא בטופס",
+    "received_dates_differ": "מתחת למספרים המרכזיים רשומים תאריכים שונים ({dates}) – יש לבחור את תאריך הקבלה",
 }
+
+# The received date is the one written (or stamped "התקבל") right under the central number; a date found there is
+# labelled with this text (the central number's value filled in).
+RECEIVED_DATE_ANCHOR_LABEL = "מתחת למספר המרכזי {value}"
 
 # Why OCR evidence is missing (no OCR engine is installed in this deployment).
 OCR_UNAVAILABLE_REASON = "לא מותקן מנוע OCR – לא ניתן לאמת תוויות ומיקומים מטקסט העמוד"
@@ -166,6 +206,9 @@ EXPORT_MODE_LABELS = {
     "filtered": "ייצא לפי הסינון הנוכחי",
     "approved": "ייצא מאושרים בלבד",
 }
+
+# Export-only columns (after the field columns).
+EXPORT_COLUMN_LABELS = {"duplicate_of": "ההתחייבות מופיעה גם ב"}
 
 # Extra (non-field) table/export columns.
 FORM_COLUMN_LABELS = {

@@ -1,5 +1,5 @@
 import { useMeta } from '../../meta/MetaContext'
-import { fieldsUsing } from '../../lib/pageNumbers'
+import { fieldsUsing, fitsKind } from '../../lib/pageNumbers'
 import PageNumberRow from './PageNumberRow'
 
 /**
@@ -14,13 +14,14 @@ export default function PageSources({ sources, fields, numbers, focusKey, onShow
   const ocrLabels = [...new Set((sources.ocr_result?.labels ?? []).map((label) => meta.fieldLabel(label.field)))]
 
   const rows = numbers
-    .map((item) => ({ item, usedBy: fieldsUsing(fields, item.key) }))
+    .map((item) => ({ item, usedBy: fieldsUsing(fields, item.key, meta.datePattern) }))
     .sort((a, b) => (a.usedBy.length > 0) - (b.usedBy.length > 0))
-  const assignOptions = meta.fields.map(({ key, label }) => ({ key, label }))
+  // A date can go to a date field, any other number to a number / ID field.
+  const assignOptionsFor = (item) => meta.fields.filter((field) => fitsKind(item, field.kind)).map(({ key, label }) => ({ key, label }))
 
   return (
     <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">מספרים שנמצאו בעמוד</p>
+      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">מספרים ותאריכים שנמצאו בעמוד</p>
       <p className="text-[11px] text-gray-500 dark:text-gray-400">
         {meta.source_labels.barcode}: {statusOf(sources.barcode_result)} · {meta.source_labels.ocr}: {statusOf(sources.ocr_result)}
         {ocrLabels.length > 0 && ` (תוויות: ${ocrLabels.join(', ')})`} · {meta.source_labels.llm}: {sources.llm_result ? 'הורץ' : 'לא הופעל'}
@@ -43,7 +44,7 @@ export default function PageSources({ sources, fields, numbers, focusKey, onShow
               usedBy={usedBy}
               focused={item.key === focusKey}
               onShow={onShow}
-              assignOptions={assignOptions}
+              assignOptions={assignOptionsFor(item)}
               onAssign={onAssign}
               disabled={saving}
             />
