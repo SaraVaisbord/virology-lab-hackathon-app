@@ -26,16 +26,27 @@ export default function DocumentViewer({ imageUrl, field, focus, onClearFocus, a
   const meta = useMeta()
   const [zoom, setZoom] = useState(ZOOM_MIN)
   const [failed, setFailed] = useState(false)
-  const fieldRef = useRef(null)
-  const focusRef = useRef(null)
+  const [loaded, setLoaded] = useState(false)
+  const viewportRef = useRef(null)
+  const imageRef = useRef(null)
   const fieldBox = hasBox(field) ? field : null
   const focusBox = focus?.box ?? null
+  const target = focusBox ?? fieldBox
 
-  useEffect(() => { setFailed(false) }, [imageUrl])
+  useEffect(() => { setFailed(false); setLoaded(false) }, [imageUrl])
 
+  // Bring the highlighted value to the middle of the viewer: computed from the image size, so it works only once the
+  // image is loaded (it has no height before) and scrolls just this viewer — never the dialog around it.
   useEffect(() => {
-    (focusRef.current ?? fieldRef.current)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-  }, [fieldBox?.id, focus?.key, zoom])
+    const viewport = viewportRef.current
+    const image = imageRef.current
+    if (!viewport || !image || !loaded || !target) return
+    viewport.scrollTo({
+      left: Math.max(0, (target.x + target.width / 2) * image.clientWidth - viewport.clientWidth / 2),
+      top: Math.max(0, (target.y + target.height / 2) * image.clientHeight - viewport.clientHeight / 2),
+      behavior: 'smooth',
+    })
+  }, [loaded, zoom, target?.x, target?.y, target?.width, target?.height])
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
@@ -64,23 +75,22 @@ export default function DocumentViewer({ imageUrl, field, focus, onClearFocus, a
         </div>
       </div>
 
-      <div className="min-h-[260px] flex-1 overflow-auto rounded-b-xl bg-white dark:bg-slate-900" dir="ltr">
+      <div ref={viewportRef} className="min-h-[260px] flex-1 overflow-auto rounded-b-xl bg-white dark:bg-slate-900" dir="ltr">
         {failed || !imageUrl ? (
           <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             <ImageOff size={22} /> אין תמונה זמינה
           </div>
         ) : (
           <div className="relative" style={{ width: `${zoom * 100}%` }}>
-            <img src={imageUrl} alt={alt} onError={() => setFailed(true)} className="block h-auto w-full select-none" draggable={false} />
+            <img ref={imageRef} src={imageUrl} alt={alt} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} className="block h-auto w-full select-none" draggable={false} />
             {fieldBox && (
               <div
-                ref={fieldRef}
                 className={`pointer-events-none absolute rounded-md border-2 border-review-500 bg-review-400/15 transition-all duration-300 ${focusBox ? '' : DIM_PAGE}`}
                 style={boxStyle(fieldBox)}
               />
             )}
             {focusBox && (
-              <div ref={focusRef} className={`pointer-events-none absolute rounded-md border-[3px] border-teal-500 bg-teal-400/15 transition-all duration-300 ${DIM_PAGE}`} style={boxStyle(focusBox)}>
+              <div className={`pointer-events-none absolute rounded-md border-[3px] border-teal-500 bg-teal-400/15 transition-all duration-300 ${DIM_PAGE}`} style={boxStyle(focusBox)}>
                 <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-teal-600 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white shadow">{focus.value}</span>
               </div>
             )}
