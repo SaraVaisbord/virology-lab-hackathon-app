@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+// Same address as the interface: in development Vite forwards /api to the backend (vite.config.js), on AWS the load
+// balancer does. Same-origin requests need no CORS, so no browser setting or extension can block them.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const COLUMN_FILTER_PREFIX = 'filter_'
 
 async function parseError(response) {
