@@ -4,7 +4,8 @@ import os
 
 # Must run before config is imported: tests never load backend/.env (real API keys stay out of tests and output).
 os.environ["APP_ENV"] = "test"
-for _name in [n for n in os.environ if n.startswith(("GEMINI_API_KEY", "OPENAI_API_KEY", "OPEN_AI_API_KEY"))]:
+os.environ["AUTH_ENABLED"] = "0"  # login is tested on its own (test_auth.py); everything else runs logged-out
+for _name in [n for n in os.environ if n.startswith(("GEMINI_API_KEY", "OPENAI_API_KEY", "OPEN_AI_API_KEY", "ANTHROPIC_API_KEY"))]:
     del os.environ[_name]
 
 import importlib  # noqa: E402

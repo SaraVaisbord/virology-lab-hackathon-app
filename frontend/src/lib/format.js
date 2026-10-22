@@ -19,6 +19,15 @@ export function groupFieldsByName(fields = []) {
 
 const dateTimeFormatter = new Intl.DateTimeFormat('he-IL', { dateStyle: 'short', timeStyle: 'short' })
 
+const dateFormatter = new Intl.DateTimeFormat('he-IL', { dateStyle: 'short' })
+
+/** A day from a server time — stored as UTC without a zone, so read as UTC (not as local time). */
+export function formatDate(value) {
+  if (!value) return EMPTY
+  const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value}Z`)
+  return Number.isNaN(date.getTime()) ? String(value) : dateFormatter.format(date)
+}
+
 export function formatDateTime(value) {
   if (!value) return EMPTY
   const date = new Date(value)

@@ -6,9 +6,11 @@ import DataTable from './components/DataTable'
 import TableToolbar from './components/TableToolbar'
 import ProcessingBanner from './components/ProcessingBanner'
 import FormDetailsModal from './components/form-details/FormDetailsModal'
+import CorrectionInsightsDashboard from './components/insights/CorrectionInsightsDashboard'
 import { api } from './api'
 import { useForms } from './hooks/useForms'
 import { useDebouncedValue } from './hooks/useDebouncedValue'
+import { useHashRoute } from './hooks/useHashRoute'
 
 const TOAST_DURATION_MS = 2500
 const INITIAL_FILTERS = { status: '', query: '', columnFilters: {}, sortBy: 'id', sortDir: 'desc' }
@@ -23,6 +25,7 @@ function downloadBlob(blob, fileName) {
 }
 
 export default function App() {
+  const route = useHashRoute()
   const [darkMode, setDarkMode] = useState(false)
   const [filters, setFilters] = useState(INITIAL_FILTERS)
   const [selected, setSelected] = useState(null) // { form, fieldId, editMode }
@@ -86,9 +89,11 @@ export default function App() {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-surface-page transition-colors duration-200 dark:bg-slate-950" dir="rtl">
-      <Header darkMode={darkMode} onToggleDark={() => setDarkMode((value) => !value)} />
+      <Header darkMode={darkMode} onToggleDark={() => setDarkMode((value) => !value)} route={route} />
 
       <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4">
+        {route === 'insights' ? <CorrectionInsightsDashboard /> : (
+        <>
         <div className="flex-none">
           <h1 className="text-lg font-bold text-navy-800 dark:text-gray-100 sm:text-xl">לוח בקרה – אימות טפסים</h1>
           <p className="mt-0.5 hidden text-sm text-gray-400 dark:text-gray-500 sm:block">העלאה, חילוץ אוטומטי ואימות של טפסי התחייבות</p>
@@ -116,6 +121,8 @@ export default function App() {
             />
           </div>
         </div>
+        </>
+        )}
       </main>
 
       <Footer />

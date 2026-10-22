@@ -81,17 +81,28 @@ def test_overloaded_model_falls_back_to_next_model(monkeypatch, page):
     _use(monkeypatch, router)
 
     assert ai_extractor.extract_from_image(page)["_model"] == "fallback-model"
-    assert calls == [(0, "primary-model"), (1, "primary-model"), (0, "fallback-model")]
+    # An overloaded model is Google's capacity, not the key's: the page is not sent to it again with key #2.
+    assert calls == [(0, "primary-model"), (0, "fallback-model")]
 
 
 def test_resting_routes_are_skipped_on_the_next_page(monkeypatch, page):
+    router, calls = _router({(0, "primary-model"): FakeApiError(429, "RESOURCE_EXHAUSTED")})
+    _use(monkeypatch, router)
+    ai_extractor.extract_from_image(page)
+    calls.clear()
+
+    ai_extractor.extract_from_image(page)
+    assert calls == [(1, "primary-model")]  # key #1 is still resting (quota is per key)
+
+
+def test_overloaded_model_rests_on_every_key(monkeypatch, page):
     router, calls = _router({(0, "primary-model"): FakeApiError(504, "DEADLINE_EXCEEDED")})
     _use(monkeypatch, router)
     ai_extractor.extract_from_image(page)
     calls.clear()
 
     ai_extractor.extract_from_image(page)
-    assert calls == [(1, "primary-model")]  # key #1 is still resting
+    assert calls == [(0, "fallback-model")]  # the primary model rests on both keys
 
 
 def test_all_routes_out_of_quota_pauses_until_the_earliest(monkeypatch, page):

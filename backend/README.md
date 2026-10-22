@@ -73,6 +73,7 @@ uvicorn main:app --port 8000
 | POST | `/forms/{id}/fields` | הוספת ערך ידנית / בחירת מספר מהעמוד |
 | DELETE | `/forms/{id}/fields/{field_id}` | מחיקת ערך (לא יחזור בעיבוד חוזר) |
 | POST | `/forms/{id}/retry` | החזרת טופס שנכשל לתור |
+| GET | `/insights/corrections` | דפוסים חוזרים בתיקונים של הלבורנטית, והמלצה לבדיקה לכל דפוס – `since`, `until`, `field_name`. בלי ערכים ובלי תמונות. זה **לא** מדד דיוק: שדות שאף אחד לא פתח לא נכללים (`coverage.auto_accepted_fields`). הספים ב-`INSIGHTS_*` |
 | GET | `/health` | בדיקת תקינות |
 
 כל הנתיבים מקבלים את הקידומת `API_PREFIX` (בענן: `/api/forms`…).

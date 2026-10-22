@@ -30,12 +30,15 @@ FIELD_KINDS = {
 DATE_PATTERN = r"(?<!\d)(\d{1,2})[./\-](\d{1,2})[./\-](\d{2}|\d{4})(?!\d)"
 
 # LLM page inventory (all_numbers): how each number appears on the page, and the "not assigned" marker.
-INVENTORY_KINDS = ("barcode", "sticker", "printed", "handwritten")
+INVENTORY_KIND_LABELS = {"barcode": "ברקוד", "sticker": "מדבקה", "printed": "דפוס", "handwritten": "כתב יד"}
+INVENTORY_KINDS = tuple(INVENTORY_KIND_LABELS)
 UNASSIGNED = "none"
 
 # The export has one row per commitment: the commitment number is the row key (the lab's definition). The same
 # number on two forms is flagged for the lab worker (usually one form uploaded twice).
 ROW_KEY_FIELD = "commitment_number"
+# The field naming the sending institution (correction insights are grouped by it).
+SENDER_FIELD = "sender"
 
 # Fields that may legitimately hold several values on one page.
 MULTI_VALUE_FIELDS = frozenset({"central_number", "commitment_number"})
@@ -158,7 +161,15 @@ CONFIDENCE_LEVELS = frozenset(CONFIDENCE_LABELS)
 # How a barcode relates to the value the LLM read.
 BARCODE_MATCH_LABELS = {"exact": "זהה לקריאת ה-AI", "near": "שונה בתו אחד מקריאת ה-AI"}
 
-FORM_TYPES = frozenset({"clalit", "maccabi", "meuhedet", "leumit", "hospital", "other"})
+FORM_TYPE_LABELS = {
+    "clalit": "כללית",
+    "maccabi": "מכבי",
+    "meuhedet": "מאוחדת",
+    "leumit": "לאומית",
+    "hospital": "בית חולים",
+    "other": "אחר",
+}
+FORM_TYPES = frozenset(FORM_TYPE_LABELS)
 
 SENDER_KINDS = frozenset({"health_fund", "hospital", "lab", "government", "military", "other"})
 
@@ -191,6 +202,41 @@ CHANGE_KINDS = frozenset(CHANGE_KIND_LABELS)
 VALUE_ORIGINS = frozenset({"machine", "machine_confirmed", "manual"})
 # Up to this many changed characters (after normalizing) is a "typo"; more is a different value.
 TYPO_MAX_CHANGED_CHARS = 2
+# Change kinds that mean the value shown was wrong (format_only is not a mistake; missing / extra values are their
+# own patterns).
+WRONG_VALUE_CHANGE_KINDS = frozenset({"typo", "transposition", "day_month_swap", "wrong_field", "different_value"})
+
+# Correction insights: recurring patterns found in field_events. They point at something worth checking —
+# none of them is an accuracy figure (fields the lab worker never opened are not in the history).
+INSIGHT_PATTERN_LABELS = {
+    "frequent_correction": "שדה שמתוקן לעתים קרובות",
+    "silent_error": "ערך שסומן כמאומת ובכל זאת תוקן",
+    "wrong_field": "ערך ששויך לשדה הלא נכון",
+    "digit_confusion": "בלבול חוזר בין שתי ספרות",
+    "day_month_swap": "היום והחודש בתאריך הוחלפו",
+    "missed_value": "ערך שה-AI החמיץ",
+    "extra_value": "ערך מיותר שה-AI שייך לשדה",
+    "better_source": "מקור אחר קרא נכון כשהערך שהוצג היה שגוי",
+}
+INSIGHT_PATTERNS = frozenset(INSIGHT_PATTERN_LABELS)
+# What to check for each pattern. Placeholders: {field}, {matched_field}, {source} are Hebrew labels; {read} / {correct}
+# are the two digits of a confusion; {percent} is the corrected share.
+INSIGHT_RECOMMENDATIONS = {
+    "frequent_correction": "{percent}% מהערכים שנבדקו בשדה {field} תוקנו – מומלץ לבדוק את ההנחיה ל-AI ואת דוגמאות הטפסים לשדה זה",
+    "silent_error": "ערכים בשדה {field} סומנו 'אומת משני מקורות' ובכל זאת תוקנו – מומלץ לבדוק את כללי האימות של השדה לפני שסומכים על הסימון",
+    "wrong_field": "ערך שהוצג בשדה {field} היה שייך ל{matched_field} – מומלץ לחדד בהנחיה ל-AI את ההבחנה בין שני השדות",
+    "digit_confusion": "בשדה {field} הספרה {correct} נקראה שוב ושוב כ-{read} – מומלץ לבדוק את איכות הסריקה ואת קריאת הספרות האלה",
+    "day_month_swap": "בשדה {field} היום והחודש הוחלפו – מומלץ לבדוק את פורמט התאריך בהנחיה ל-AI",
+    "missed_value": "הלבורנטית השלימה ידנית ערכים שה-AI לא מצא בשדה {field} – מומלץ לבדוק אם התוויות של השדה בטפסים האלה מוכרות להנחיה",
+    "extra_value": "ערכים שה-AI שייך לשדה {field} נמחקו – מומלץ לבדוק אילו מספרים לא רלוונטיים נקלטים בשדה",
+    "better_source": "בשדה {field} המקור '{source}' קרא את הערך הנכון כשהערך שהוצג היה שגוי – מומלץ לבדוק אם לתת עדיפות למקור זה בשדה",
+}
+# How well a pattern is supported — by the number of events behind it (thresholds in config).
+INSIGHT_SUPPORT_LABELS = {"low": "ביסוס נמוך – מעט אירועים", "medium": "ביסוס בינוני", "high": "ביסוס גבוה"}
+INSIGHT_STATUS_MESSAGES = {
+    "ok": None,
+    "insufficient_data": "אין עדיין מספיק תיקונים לזיהוי דפוסים: נבדקו {reviewed} ערכים, נדרשים לפחות {required}",
+}
 
 # Human-readable reasons attached to fields that need review. {placeholders} are filled by the extraction service.
 REASONS = {
@@ -228,18 +274,18 @@ UPLOAD_TYPES = {
 # User-facing extraction failure messages (technical details go to the server log only).
 EXTRACTION_ERRORS = {
     "image_missing": "קובץ התמונה של העמוד לא נמצא",
-    "timeout": "Gemini לא הגיב בזמן – אפשר לנסות שוב",
-    "model": "שגיאה בקבלת תשובה מ-Gemini – אפשר לנסות שוב",
-    "config": "מפתח Gemini לא הוגדר בשרת",
-    "quota": "Gemini לא זמין כרגע (מכסה או עומס) – הטופס הוחזר לתור",
+    "timeout": "מודל ה-AI לא הגיב בזמן – אפשר לנסות שוב",
+    "model": "לא התקבלה תשובה תקינה מאף מודל AI – אפשר לנסות שוב",
+    "config": "לא הוגדר בשרת מפתח לאף מודל AI (Gemini / Claude)",
+    "quota": "כל מודלי ה-AI לא זמינים כרגע (מכסה או עומס) – הטופס הוחזר לתור",
     "barcode": "סריקת הברקודים נכשלה",
     "ocr": "הסריקה המקומית (OCR) נכשלה",
     "unexpected": "שגיאה לא צפויה בעיבוד הטופס",
 }
 
 QUEUE_PAUSE_REASON_LABELS = {
-    "quota": "מכסת הבקשות ל-Gemini נוצלה בכל המפתחות – העיבוד יתחדש אוטומטית",
-    "busy": "כל המודלים של Gemini עמוסים כרגע – ניסיון חוזר אוטומטי בקרוב",
+    "quota": "מכסת הבקשות נוצלה בכל מודלי ה-AI – העיבוד יתחדש אוטומטית",
+    "busy": "כל מודלי ה-AI עמוסים כרגע – ניסיון חוזר אוטומטי בקרוב",
     "disabled": "החילוץ האוטומטי מושבת בשרת (WORKER_ENABLED=false) – טפסים חדשים ממתינים בתור",
 }
 

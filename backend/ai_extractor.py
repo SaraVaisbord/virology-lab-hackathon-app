@@ -125,10 +125,17 @@ class GeminiRouter:
         with self._lock:
             return next((r for i, r in enumerate(self._routes) if i not in exclude and r.resting_until <= now), None)
 
-    def rest(self, route: Route, seconds: float, problem: str, whole_key: bool = False) -> None:
+    def rest(self, route: Route, seconds: float, problem: str, whole_key: bool = False, whole_model: bool = False) -> None:
+        """whole_key: the key itself is bad (every model on it rests). whole_model: the model is overloaded — that
+        is Google's capacity, not the key's, so trying it with another key would only send the page again."""
         until = time.time() + seconds
         with self._lock:
-            targets = [r for r in self._routes if r.key_index == route.key_index] if whole_key else [route]
+            if whole_key:
+                targets = [r for r in self._routes if r.key_index == route.key_index]
+            elif whole_model:
+                targets = [r for r in self._routes if r.model == route.model]
+            else:
+                targets = [route]
             for target in targets:
                 target.resting_until = max(target.resting_until, until)
                 target.last_problem = problem
@@ -303,7 +310,7 @@ def extract_from_image(image_path: str | Path, known_senders: list[str] | None =
             if kind is None:
                 raise ExtractionError(f"Gemini API error: {exc}") from exc
             seconds = _cooldown_seconds(kind, exc)
-            router.rest(route, seconds, kind, whole_key=(kind == "rejected_key"))
+            router.rest(route, seconds, kind, whole_key=(kind == "rejected_key"), whole_model=(kind == "busy"))
             logger.warning("Gemini route %s: %s — resting %.0fs, trying next route", route.label, kind, seconds)
             continue
 

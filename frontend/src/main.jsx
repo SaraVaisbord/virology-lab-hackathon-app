@@ -2,12 +2,15 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { MetaProvider } from './meta/MetaContext'
+import { AuthGate } from './auth/AuthGate'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MetaProvider>
-      <App />
-    </MetaProvider>
+    <AuthGate>
+      <MetaProvider>
+        <App />
+      </MetaProvider>
+    </AuthGate>
   </React.StrictMode>
 )

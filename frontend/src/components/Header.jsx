@@ -1,6 +1,14 @@
-import { Moon, Sun } from 'lucide-react'
+import { Lightbulb, LogOut, Moon, Sun, Table2 } from 'lucide-react'
+import { ROUTES } from '../hooks/useHashRoute'
+import { useAuth } from '../auth/AuthGate'
 
-export default function Header({ darkMode, onToggleDark }) {
+const NAV = [
+  { route: 'forms', label: 'טפסים', icon: Table2 },
+  { route: 'insights', label: 'תובנות מתיקונים', icon: Lightbulb },
+]
+
+export default function Header({ darkMode, onToggleDark, route }) {
+  const auth = useAuth()
   return (
     <header className="sticky top-0 z-40 border-b border-gray-200/80 dark:border-gray-800"
       style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)' }}>
@@ -74,6 +82,24 @@ export default function Header({ darkMode, onToggleDark }) {
         {/* Left: Actions */}
         <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2">
 
+          <nav className="flex items-center gap-1" aria-label="מסכים">
+            {NAV.map(({ route: key, label, icon: Icon }) => (
+              <a
+                key={key}
+                href={ROUTES[key]}
+                aria-current={route === key ? 'page' : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+                  route === key
+                    ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+                }`}
+              >
+                <Icon size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">{label}</span>
+              </a>
+            ))}
+          </nav>
+
           {/* Dark mode toggle */}
           <button
             type="button"
@@ -83,6 +109,18 @@ export default function Header({ darkMode, onToggleDark }) {
           >
             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
+
+          {auth.enabled && (
+            <button
+              type="button"
+              onClick={auth.logout}
+              aria-label="יציאה מהמערכת"
+              title="יציאה"
+              className="w-11 h-11 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+            >
+              <LogOut size={20} />
+            </button>
+          )}
         </div>
 
       </div>

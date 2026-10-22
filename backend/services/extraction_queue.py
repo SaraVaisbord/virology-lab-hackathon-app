@@ -95,7 +95,7 @@ class ExtractionQueue:
             extract_for_form(form)
             logger.info("Form %s extracted", form["id"])
         except ModelsUnavailableError as exc:
-            logger.warning("All Gemini routes resting (%s) — pausing queue for %.0fs", exc.reason, exc.retry_after_seconds)
+            logger.warning("All LLM providers resting (%s) — pausing queue for %.0fs", exc.reason, exc.retry_after_seconds)
             queries.return_to_queue(form["id"])
             self.pause(exc.retry_after_seconds, exc.reason)
         except Exception as exc:

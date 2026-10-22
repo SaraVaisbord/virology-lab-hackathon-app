@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Select, String, and_, asc, cast, delete, desc, exists, func, or_, select, update
@@ -21,6 +22,7 @@ from .constants import (
     PENDING_FORM_STATUSES,
     REASONS,
     REVIEW_FIELD_STATUSES,
+    SENDER_FIELD,
     SENDER_KINDS,
     SOURCE_LABELS,
 )
@@ -540,11 +542,66 @@ def confirm_field(form_id: int, field_id: int, corrected_value: str | None) -> d
         return form_to_dict(form, with_sources=True)
 
 
+def _event_to_dict(row: FieldEvent) -> dict[str, Any]:
+    return {column.name: getattr(row, column.name) for column in FieldEvent.__table__.columns}
+
+
 def list_field_events(form_id: int) -> list[dict[str, Any]]:
     """The correction history of one form, oldest first."""
     with SessionLocal() as session:
         rows = session.execute(select(FieldEvent).where(FieldEvent.form_id == form_id).order_by(FieldEvent.id)).scalars()
-        return [{column.name: getattr(row, column.name) for column in FieldEvent.__table__.columns} for row in rows]
+        return [_event_to_dict(row) for row in rows]
+
+
+def correction_events(since: datetime | None = None, until: datetime | None = None,
+                      field_name: str | None = None) -> list[dict[str, Any]]:
+    """The correction history for pattern analysis, oldest first (one query): each event with its form's type and
+    the form's sender as read (`sender_text` — free text: the caller matches it to the known senders and passes on
+    only that name). No other field value is read.
+
+    Plain columns and one sender lookup per form (a grouped join), not ORM objects and a per-row subquery: measured
+    on 200,000 events that is 3 s instead of 9 s."""
+    if field_name is not None:
+        _require_in(field_name, FIELDS, "field_name")
+    sender_per_form = (
+        select(ExtractedField.form_id, func.min(_field_display_value()).label("sender_text"))
+        .where(ExtractedField.field_name == SENDER_FIELD)
+        .group_by(ExtractedField.form_id)
+        .subquery()
+    )
+    stmt = (
+        select(*FieldEvent.__table__.columns, Form.form_type, sender_per_form.c.sender_text)
+        .join(Form, Form.id == FieldEvent.form_id)
+        .outerjoin(sender_per_form, sender_per_form.c.form_id == FieldEvent.form_id)
+        .order_by(FieldEvent.id)
+    )
+    if since is not None:
+        stmt = stmt.where(FieldEvent.created_at >= since)
+    if until is not None:
+        stmt = stmt.where(FieldEvent.created_at <= until)
+    if field_name is not None:
+        stmt = stmt.where(FieldEvent.field_name == field_name)
+    with SessionLocal() as session:
+        return [dict(row) for row in session.execute(stmt).mappings()]
+
+
+def count_unreviewed_verified_fields(since: datetime | None = None, until: datetime | None = None,
+                                     field_name: str | None = None) -> int:
+    """Fields the extraction marked verified that the lab worker never decided on (forms uploaded in the range):
+    accepted without review, so they are not in the correction history."""
+    if field_name is not None:
+        _require_in(field_name, FIELDS, "field_name")
+    stmt = select(func.count(ExtractedField.id)).join(Form, Form.id == ExtractedField.form_id).where(
+        ExtractedField.status == "verified"
+    )
+    if since is not None:
+        stmt = stmt.where(Form.uploaded_at >= since)
+    if until is not None:
+        stmt = stmt.where(Form.uploaded_at <= until)
+    if field_name is not None:
+        stmt = stmt.where(ExtractedField.field_name == field_name)
+    with SessionLocal() as session:
+        return int(session.execute(stmt).scalar_one())
 
 
 # ── Listing (paging, filtering, sorting — all in SQL) ────────────────────────

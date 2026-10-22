@@ -16,6 +16,10 @@ from db.constants import (
     FIELD_STATUS_LABELS,
     FORM_COLUMN_LABELS,
     FORM_STATUS_LABELS,
+    FORM_TYPE_LABELS,
+    INSIGHT_PATTERN_LABELS,
+    INSIGHT_SUPPORT_LABELS,
+    INVENTORY_KIND_LABELS,
     MULTI_VALUE_FIELDS,
     ROW_KEY_FIELD,
     PENDING_FORM_STATUSES,
@@ -51,6 +55,10 @@ def get_meta():
         "source_labels": SOURCE_LABELS,
         "source_status_labels": SOURCE_STATUS_LABELS,
         "queue_pause_reasons": QUEUE_PAUSE_REASON_LABELS,
+        "insight_patterns": INSIGHT_PATTERN_LABELS,
+        "insight_support_levels": INSIGHT_SUPPORT_LABELS,
+        "form_types": FORM_TYPE_LABELS,
+        "written_as_labels": INVENTORY_KIND_LABELS,  # how a value is written on the page
         "upload": {
             "max_file_size_mb": config.MAX_FILE_SIZE_MB,
             "accepted_mime_types": [spec["mime"] for spec in UPLOAD_TYPES.values()],

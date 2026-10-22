@@ -79,6 +79,42 @@ HANDWRITTEN_DIGITS_MODEL = Path(os.getenv("HANDWRITTEN_DIGITS_MODEL", str(BASE_D
 # A received date further than this from today is suspicious (e.g. a handwritten 6 read as 0).
 RECEIVED_DATE_MAX_AGE_DAYS = _env_int("RECEIVED_DATE_MAX_AGE_DAYS", 365)
 
+# ── Login: a one-time code sent to one mailbox ───────────────────────────────
+# Whoever can read AUTH_EMAIL can log in: "send code" mails a 6-digit code there; entering it gives a signed session
+# cookie. Off when AUTH_ENABLED=false (local development, tests).
+AUTH_ENABLED = _env_bool("AUTH_ENABLED", True)
+# DEMO ONLY: when set, "send code" sends nothing and this fixed code always logs in (any email address may be typed).
+# For showing the login flow before mail sending is set up — remove it before real data.
+AUTH_DEMO_CODE = os.getenv("AUTH_DEMO_CODE", "").strip()
+AUTH_EMAIL = os.getenv("AUTH_EMAIL", "").strip()
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = _env_int("SMTP_PORT", 587)  # 587 = STARTTLS, 465 = TLS from the start
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM = os.getenv("SMTP_FROM", "").strip() or SMTP_USERNAME
+SMTP_TIMEOUT_SECONDS = _env_int("SMTP_TIMEOUT_SECONDS", 20)
+# Signs the session cookie. Set it (a long random string) so sessions survive a restart; empty → a random one per run.
+AUTH_SECRET = os.getenv("AUTH_SECRET", "").strip()
+AUTH_CODE_TTL_MINUTES = _env_int("AUTH_CODE_TTL_MINUTES", 10)
+AUTH_CODE_MAX_ATTEMPTS = _env_int("AUTH_CODE_MAX_ATTEMPTS", 5)  # wrong guesses before the code is void
+AUTH_CODE_RESEND_SECONDS = _env_int("AUTH_CODE_RESEND_SECONDS", 60)  # at most one code per this many seconds
+AUTH_SESSION_HOURS = _env_int("AUTH_SESSION_HOURS", 12)
+AUTH_COOKIE_NAME = "session"
+# Send the cookie over HTTPS only. Keep false while the site is plain HTTP (it would never be sent back).
+AUTH_COOKIE_SECURE = _env_bool("AUTH_COOKIE_SECURE", False)
+
+# ── Correction insights (patterns in the lab worker's corrections) ───────────
+# Below this many reviewed machine values in the range there is not enough history to point at any pattern.
+INSIGHTS_MIN_REVIEWED_FIELDS = _env_int("INSIGHTS_MIN_REVIEWED_FIELDS", 20)
+# A pattern is reported from this many events; from the next two counts its support is medium / high.
+INSIGHTS_MIN_EVENTS = _env_int("INSIGHTS_MIN_EVENTS", 3)
+INSIGHTS_MEDIUM_SUPPORT_EVENTS = _env_int("INSIGHTS_MEDIUM_SUPPORT_EVENTS", 10)
+INSIGHTS_HIGH_SUPPORT_EVENTS = _env_int("INSIGHTS_HIGH_SUPPORT_EVENTS", 30)
+# A field is "often corrected" when at least this share (%) of its reviewed values were corrected.
+INSIGHTS_MIN_CORRECTION_PERCENT = _env_int("INSIGHTS_MIN_CORRECTION_PERCENT", 20)
+# A pattern is "concentrated" in a form type / sender / way of writing when at least this share (%) of it is there.
+INSIGHTS_CONCENTRATION_PERCENT = _env_int("INSIGHTS_CONCENTRATION_PERCENT", 80)
+
 # ── Extraction queue ─────────────────────────────────────────────────────────
 WORKER_ENABLED = _env_bool("WORKER_ENABLED", True)
 # With LLM_ENABLED=false the queue still runs the free local stages (preprocessing, barcodes, OCR) — no tokens.
@@ -94,19 +130,19 @@ def _env_list(name: str) -> list[str]:
 
 
 _PLACEHOLDER_KEY = "your-key-here"
-_NUMBERED_KEY = re.compile(r"^GEMINI_API_KEY_(\d+)$")
 
 
-def _gemini_keys() -> list[str]:
-    """Several keys (ideally from different Google Cloud projects — quota is per project) are tried in turn.
-    Accepted forms, in this order: GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, ... (numeric order),
-    then GEMINI_API_KEYS=key,key,... Duplicates and the .env.example placeholder are dropped."""
-    numbered = sorted((int(m.group(1)), value) for name, value in os.environ.items() if (m := _NUMBERED_KEY.match(name)))
-    candidates = [os.getenv("GEMINI_API_KEY", ""), *(value for _, value in numbered), *_env_list("GEMINI_API_KEYS")]
+def _api_keys(name: str) -> list[str]:
+    """Several keys of one provider, tried in turn. Accepted forms, in this order: NAME, NAME_2, NAME_3, ...
+    (numeric order), then NAMES=key,key,... Duplicates and the .env.example placeholder are dropped."""
+    numbered_name = re.compile(rf"^{name}_(\d+)$")
+    numbered = sorted((int(m.group(1)), value) for env, value in os.environ.items() if (m := numbered_name.match(env)))
+    candidates = [os.getenv(name, ""), *(value for _, value in numbered), *_env_list(f"{name}S")]
     return [key for key in dict.fromkeys(k.strip() for k in candidates) if key and key != _PLACEHOLDER_KEY]
 
 
-GEMINI_API_KEYS = _gemini_keys()
+# Quota is per Google Cloud project: keys from different projects add up, keys of one project share it.
+GEMINI_API_KEYS = _api_keys("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-flash-latest")
 # Models to fall back to when the primary one is overloaded (503/504) or out of quota, in order. Each model has its
 # own daily quota. flash-lite is weaker (more extra/missed values — those are never "verified" and go to review).
@@ -120,13 +156,33 @@ GEMINI_BUSY_COOLDOWN_SECONDS = _env_int("GEMINI_BUSY_COOLDOWN_SECONDS", 90)  # 5
 GEMINI_INVALID_KEY_COOLDOWN_SECONDS = _env_int("GEMINI_INVALID_KEY_COOLDOWN_SECONDS", 3600)  # 400/401/403 key rejected
 GEMINI_IMAGE_MAX_SIDE_PX = _env_int("GEMINI_IMAGE_MAX_SIDE_PX", 1600)
 GEMINI_IMAGE_JPEG_QUALITY = _env_int("GEMINI_IMAGE_JPEG_QUALITY", 80)
+
+# ── LLM providers: which ones read the page, in order ────────────────────────
+# The first provider that answers is used; one that is out of quota, overloaded or not configured hands the page to
+# the next (services/llm_router.py). Known providers: gemini, claude, openai.
+LLM_PROVIDERS = _env_list("LLM_PROVIDERS") or ["gemini", "claude"]
+
+# ── Claude (Anthropic) ───────────────────────────────────────────────────────
+# ANTHROPIC_API_KEY, ANTHROPIC_API_KEY_2, ... — tried in turn. Rate limits are per Anthropic organization: keys of
+# one organization share them, so only keys from different organizations add capacity.
+ANTHROPIC_API_KEYS = _api_keys("ANTHROPIC_API_KEY")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5-5")
+# Thinking depth (low / medium / high / xhigh / max). Set explicitly: the model's own default is "medium".
+CLAUDE_EFFORT = os.getenv("CLAUDE_EFFORT", "medium")
+CLAUDE_MAX_TOKENS = _env_int("CLAUDE_MAX_TOKENS", 16000)
+CLAUDE_TIMEOUT_SECONDS = _env_int("CLAUDE_TIMEOUT_SECONDS", 180)
+# How long Claude rests after a failure before it is tried again (as for Gemini routes):
+CLAUDE_QUOTA_DEFAULT_BACKOFF_SECONDS = _env_int("CLAUDE_QUOTA_DEFAULT_BACKOFF_SECONDS", 60)  # 429 without retry-after
+CLAUDE_BUSY_COOLDOWN_SECONDS = _env_int("CLAUDE_BUSY_COOLDOWN_SECONDS", 90)  # overloaded / 5xx / timeout / network
+CLAUDE_INVALID_KEY_COOLDOWN_SECONDS = _env_int("CLAUDE_INVALID_KEY_COOLDOWN_SECONDS", 3600)  # 401/403 key rejected
+
 # ── OpenAI (used for provider comparison: compare_providers.py) ─────────────
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY") or "").strip()  # either spelling
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")  # same tier as Gemini Flash, for a fair comparison
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
 OPENAI_TIMEOUT_SECONDS = _env_int("OPENAI_TIMEOUT_SECONDS", 180)
 
-# MVP workaround for a local CA-certificate issue (Python 3.14 / Windows), used for Gemini and OpenAI calls.
+# MVP workaround for a local CA-certificate issue (Python 3.14 / Windows), used for Gemini, Claude and OpenAI calls.
 # Turn off in production.
 GEMINI_INSECURE_SSL = _env_bool("GEMINI_INSECURE_SSL", True)
 PROMPTS_DIR = BASE_DIR / "prompts"

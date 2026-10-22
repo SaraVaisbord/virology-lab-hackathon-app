@@ -2,6 +2,8 @@
 // balancer does. Same-origin requests need no CORS, so no browser setting or extension can block them.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const COLUMN_FILTER_PREFIX = 'filter_'
+// Fired when the server answers 401 (not logged in / session expired) — AuthGate shows the login screen.
+export const AUTH_REQUIRED_EVENT = 'auth-required'
 
 async function parseError(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -16,6 +18,7 @@ async function request(path, { json, ...options } = {}) {
     headers: json !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: json !== undefined ? JSON.stringify(json) : options.body,
   })
+  if (response.status === 401) window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))
   if (!response.ok) throw await parseError(response)
   return response.status === 204 ? null : response.json()
 }
@@ -38,6 +41,11 @@ function fileNameFromDisposition(disposition) {
 }
 
 export const api = {
+  getAuthStatus: () => request('/auth/status'),
+  requestLoginCode: (email) => request('/auth/request-code', { method: 'POST', json: { email: email || null } }),
+  verifyLoginCode: (code) => request('/auth/verify', { method: 'POST', json: { code } }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+
   getMeta: () => request('/meta'),
 
   listForms: (filters, { limit, offset = 0 }) => {
@@ -61,6 +69,14 @@ export const api = {
     request(`/forms/${formId}/fields`, { method: 'POST', json: { field_name: fieldName, value, ...options } }),
 
   deleteField: (formId, fieldId) => request(`/forms/${formId}/fields/${fieldId}`, { method: 'DELETE' }),
+
+  /** Patterns in the lab worker's corrections. since: ISO time (events from then), fieldName: one field only. */
+  getCorrectionInsights: ({ since, fieldName } = {}) => {
+    const params = new URLSearchParams()
+    if (since) params.set('since', since)
+    if (fieldName) params.set('field_name', fieldName)
+    return request(`/insights/corrections?${params}`)
+  },
 
   retryForm: (formId) => request(`/forms/${formId}/retry`, { method: 'POST' }),
   deleteForm: (formId) => request(`/forms/${formId}`, { method: 'DELETE' }),

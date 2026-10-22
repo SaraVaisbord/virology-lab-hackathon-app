@@ -1,3 +1,18 @@
+// Correction insights by support (CorrectionInsightsDashboard): a pattern backed by enough events looks settled;
+// a first suspicion is dashed and in the "needs review" colour, so it is never read as an established finding.
+export const insightSupportStyles = {
+  established: {
+    card: 'border border-slate-200 border-s-4 border-s-teal-500 bg-white dark:border-slate-700 dark:border-s-teal-400 dark:bg-slate-900',
+    badge: 'text-teal-700 bg-teal-50 dark:text-teal-300 dark:bg-teal-950/60',
+  },
+  suspicion: {
+    card: 'border border-dashed border-review-400 bg-review-50/40 dark:border-review-700 dark:bg-review-950/20',
+    badge: 'text-review-800 bg-review-100 dark:text-review-300 dark:bg-review-950/60',
+  },
+}
+// Support levels shown as a first suspicion (the rest are established).
+export const SUSPICION_SUPPORT_LEVELS = ['low']
+
 // Visual variants for the stats cards (StatsCards.jsx)
 
 export const cardVariants = {

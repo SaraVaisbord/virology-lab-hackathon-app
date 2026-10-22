@@ -51,6 +51,7 @@ from db.constants import (
     label_keywords,
 )
 from preprocessing import preprocess
+from services import llm_router
 from storage import get_storage
 from validators import digits_only, israeli_id_is_valid, match_key, parse_iso_like_date, text_key
 
@@ -420,28 +421,14 @@ def run_ocr(views, barcodes: list[dict[str, Any]], page: int | None) -> dict[str
     return {"status": "ok", "page": page, **result, "items": result["candidates"]}
 
 
-def _llm_module(provider: str):
-    """LLM providers share one interface: extract_from_image(image_path, known_senders) -> dict in the same shape.
-    Looked up at call time (not cached) so tests can monkeypatch the providers."""
-    if provider == "gemini":
-        return ai_extractor
-    if provider == "openai":
-        import openai_extractor
-
-        return openai_extractor
-    raise ValueError(f"Unknown LLM provider: {provider!r}")
-
-
-LLM_PROVIDERS = ("gemini", "openai")
-
-
-def extract_for_form(form: dict[str, Any], provider: str = "gemini", use_llm: bool | None = None) -> None:
+def extract_for_form(form: dict[str, Any], provider: str | None = None, use_llm: bool | None = None) -> None:
     """Run all sources for one page, persist each result separately, then build the field rows.
 
     The page image is replaced by its preprocessed (upright, deskewed, highlighter-free) version first, so every
-    source and the UI share one geometry. use_llm defaults to config.LLM_ENABLED; without it no LLM is called
-    (no tokens) and only an LLM answer already stored for the page is merged. Raises on LLM failure — local
-    results are already saved by then."""
+    source and the UI share one geometry. The LLM is the first of config.LLM_PROVIDERS that answers (llm_router);
+    `provider` forces one. use_llm defaults to config.LLM_ENABLED; without it no LLM is called (no tokens) and only
+    an LLM answer already stored for the page is merged. Raises on LLM failure — local results are already saved
+    by then."""
     form_id, page = form["id"], form.get("page_number")
     use_llm = config.LLM_ENABLED if use_llm is None else use_llm
     files, key = get_storage(), form.get("image_path")
@@ -454,7 +441,7 @@ def extract_for_form(form: dict[str, Any], provider: str = "gemini", use_llm: bo
         _extract_sources(form_id, page, views, image_path, provider, use_llm)
 
 
-def _extract_sources(form_id: int, page: int | None, views, image_path: Path, provider: str, use_llm: bool) -> None:
+def _extract_sources(form_id: int, page: int | None, views, image_path: Path, provider: str | None, use_llm: bool) -> None:
     barcode_result = run_barcode_scan(views, page)
     ocr_result = run_ocr(views, barcode_result["items"], page)
     errors = {source: result["error"] for source, result in (("barcode", barcode_result), ("ocr", ocr_result)) if result["status"] == "error"}
@@ -465,7 +452,8 @@ def _extract_sources(form_id: int, page: int | None, views, image_path: Path, pr
     llm_result = (queries.get_form(form_id, with_sources=True) or {}).get("sources", {}).get("llm_result")
     if use_llm:
         try:
-            llm_result = local_extractor.drop_irrelevant_numbers(_llm_module(provider).extract_from_image(image_path, known_senders))
+            answer = llm_router.extract_from_image(image_path, known_senders, providers=[provider] if provider else None)
+            llm_result = local_extractor.drop_irrelevant_numbers(answer)
         except Exception as exc:
             queries.save_source_results(form_id, source_errors={**errors, "llm": user_facing_error(exc)})
             raise
@@ -496,8 +484,8 @@ def reverify_form(form_id: int) -> bool:
     return True
 
 
-def extract_one(form_id: int, provider: str, use_llm: bool | None = None) -> str:
-    """One-off extraction of a single form outside the queue (e.g. with OpenAI). Returns the final form status."""
+def extract_one(form_id: int, provider: str | None = None, use_llm: bool | None = None) -> str:
+    """One-off extraction of a single form outside the queue (optionally with one provider). Returns its status."""
     form = queries.get_form(form_id)
     if form is None:
         raise ValueError(f"Form {form_id} not found")
@@ -512,7 +500,7 @@ def extract_one(form_id: int, provider: str, use_llm: bool | None = None) -> str
 
 if __name__ == "__main__":
     # python -m services.extraction_service                                → re-verify every form (no LLM calls)
-    # python -m services.extraction_service --form 2 [--provider openai]   → extract one form now
+    # python -m services.extraction_service --form 2 [--provider claude]   → extract one form now
     # python -m services.extraction_service --form 2 --local-only          → local OCR/barcodes only (no tokens)
     import argparse
     import sys
@@ -521,14 +509,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--form", type=int)
-    parser.add_argument("--provider", choices=LLM_PROVIDERS, default="gemini")
+    parser.add_argument("--provider", choices=sorted(llm_router.PROVIDER_MODULES), default=None,
+                        help="one provider only (default: config.LLM_PROVIDERS, with failover)")
     parser.add_argument("--local-only", action="store_true")
     cli = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 
     if cli.form is not None:
         status = extract_one(cli.form, cli.provider, use_llm=False if cli.local_only else None)
-        print(f"Form {cli.form} ({'local only' if cli.local_only else cli.provider}): {status}", file=sys.stderr)
+        source = "local only" if cli.local_only else cli.provider or ", ".join(config.LLM_PROVIDERS)
+        print(f"Form {cli.form} ({source}): {status}", file=sys.stderr)
     else:
         rows, _ = list_forms(FormFilters(), limit=config.EXPORT_MAX_ROWS)
         done = sum(reverify_form(row["id"]) for row in rows)

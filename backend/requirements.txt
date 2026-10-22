@@ -19,6 +19,7 @@ opencv-python-headless>=4.10.0
 numpy>=1.26.0
 pyzbar>=0.1.9
 google-genai>=1.0.0
+anthropic>=2.1.0
 openpyxl>=3.1.0
 
 # generate_report.py (standalone barcode PDF report)
