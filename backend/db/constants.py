@@ -162,6 +162,36 @@ FORM_TYPES = frozenset({"clalit", "maccabi", "meuhedet", "leumit", "hospital", "
 
 SENDER_KINDS = frozenset({"health_fund", "hospital", "lab", "government", "military", "other"})
 
+# Correction history (field_events): what the lab worker did to a field and what kind of change it was — the
+# material for finding recurring extraction mistakes. Only these classifications are stored, never the values
+# (they may identify the patient; the values themselves stay in extracted_fields).
+FIELD_EVENT_ACTION_LABELS = {
+    "confirm": "אושר כפי שהוא",
+    "edit": "תוקן",
+    "replace": "הוחלף בערך מהעמוד",
+    "add": "נוסף ערך",
+    "delete": "נמחק",
+}
+FIELD_EVENT_ACTIONS = frozenset(FIELD_EVENT_ACTION_LABELS)
+CHANGE_KIND_LABELS = {
+    "none": "ללא שינוי",
+    "format_only": "שינוי כתיב בלבד",
+    "typo": "תווים בודדים שונו",
+    "transposition": "אותן ספרות בסדר אחר",
+    "day_month_swap": "היום והחודש בתאריך הוחלפו",
+    "wrong_field": "הערך שייך לשדה אחר בטופס",
+    "different_value": "ערך אחר",
+    "filled_missing": "הושלם ערך חסר",
+    "removed": "הערך נמחק",
+    "restored": "הוחזר הערך שהמערכת קראה",
+}
+CHANGE_KINDS = frozenset(CHANGE_KIND_LABELS)
+# Where the value a correction started from came from: the extraction (not yet decided), the extraction as the lab
+# worker approved it, or a value she set herself (typed, picked from the page, or emptied by deleting it).
+VALUE_ORIGINS = frozenset({"machine", "machine_confirmed", "manual"})
+# Up to this many changed characters (after normalizing) is a "typo"; more is a different value.
+TYPO_MAX_CHANGED_CHARS = 2
+
 # Human-readable reasons attached to fields that need review. {placeholders} are filled by the extraction service.
 REASONS = {
     "barcode_near_match": "ברקוד בעמוד שונה בתו אחד מקריאת ה-AI: {barcode}",

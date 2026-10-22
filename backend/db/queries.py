@@ -16,6 +16,7 @@ from .constants import (
     FORM_COLUMN_LABELS,
     FORM_STATUSES,
     FORM_TYPES,
+    INVENTORY_KINDS,
     MULTI_VALUE_FIELDS,
     PENDING_FORM_STATUSES,
     REASONS,
@@ -23,9 +24,9 @@ from .constants import (
     SENDER_KINDS,
     SOURCE_LABELS,
 )
-from .models import ExtractedField, Form, Sender
+from .models import ExtractedField, FieldEvent, Form, Sender
 from .session import SessionLocal
-from validators import digits_only, match_key, parse_iso_like_date
+from validators import classify_change, digits_only, match_key, parse_iso_like_date
 
 # ── Validation ───────────────────────────────────────────────────────────────
 
@@ -69,6 +70,114 @@ def _empty_field(form: Form, field_name: str) -> ExtractedField:
     """A field left without a value still needs a decision: 'not found' (the worker confirms it empty or fills it)."""
     reason = REASONS["rejected_by_worker" if _rejected(form).get(field_name) else "not_found"]
     return ExtractedField(field_name=field_name, status="not_found", reason=reason)
+
+
+# ── Correction history — one appended event per action of the lab worker (see FieldEvent) ─
+
+_SOURCE_VALUE_COLUMNS = {"llm": "llm_value", "barcode": "barcode_value", "ocr": "ocr_value"}
+
+
+def _display_value(row: ExtractedField) -> str | None:
+    """The value the lab worker sees for a field (as the UI and the table show it)."""
+    return row.corrected_value or row.value or row.llm_value
+
+
+def _source_values(row: ExtractedField | None) -> dict[str, str]:
+    """What each source read for this field row: {source: value}, sources that read nothing left out."""
+    if row is None:
+        return {}
+    return {source: getattr(row, column) for source, column in _SOURCE_VALUE_COLUMNS.items() if getattr(row, column)}
+
+
+def _value_origin(row: ExtractedField | None) -> str:
+    """Where a field's current value came from (a VALUE_ORIGINS key)."""
+    if row is None:
+        return "machine"
+    if row.status == "not_found":  # emptied by the worker deleting its value, or simply not found by the extraction
+        return "manual" if row.reason == REASONS["rejected_by_worker"] else "machine"
+    if row.status != "confirmed":
+        return "machine"
+    manual = row.corrected_value is not None or (_from_json(row.evidence) or {}).get("manual")
+    return "manual" if manual else "machine_confirmed"
+
+
+def _written_as(form: Form, field_name: str, row: ExtractedField | None) -> str | None:
+    """How the shown value is written on the page (an INVENTORY_KINDS key), as the AI listed it in all_numbers."""
+    value = _display_value(row) if row is not None else None
+    if not value:
+        return None
+    key = match_key(field_name, value)
+    numbers = (_from_json(form.llm_result) or {}).get("all_numbers") or []
+    return next((item["kind"] for item in numbers if isinstance(item, dict) and item.get("kind") in INVENTORY_KINDS
+                 and match_key(field_name, item.get("value")) == key), None)
+
+
+def _previous_event_id(session, form: Form, before: ExtractedField | None) -> int | None:
+    """The last event of the value this action continues: the row's own history, or — for the placeholder left by
+    deleting a value — that deletion (its row is gone, so it can't be found by field_id)."""
+    if before is None:
+        return None
+    last = select(FieldEvent.id).order_by(FieldEvent.id.desc()).limit(1)
+    if before.id is not None:
+        found = session.execute(last.where(FieldEvent.field_id == before.id)).scalar()
+        if found is not None:
+            return found
+    if _value_origin(before) == "manual" and before.status == "not_found":
+        where = (FieldEvent.form_id == form.id, FieldEvent.field_name == before.field_name, FieldEvent.action == "delete")
+        return session.execute(last.where(*where)).scalar()
+    return None
+
+
+def _lock_form(session, form_id: int) -> Form | None:
+    """The form with its fields, its row locked until the transaction ends: the worker's edits of one form run one at
+    a time, so two concurrent requests (a double click) can't both record the same correction. On PostgreSQL this is
+    SELECT … FOR UPDATE; SQLite has no row locks (and serializes writes anyway), so there it is a plain read."""
+    return session.get(Form, form_id, options=[selectinload(Form.extracted_fields)], with_for_update=True)
+
+
+def _correction_event(session, form: Form, field_name: str, action: str, before: ExtractedField | None,
+                      after: str | None, picked_from: str | None = None) -> FieldEvent | None:
+    """The history event of one action, built from the field's state just before it — call it before changing
+    anything. None when nothing new happened: a value the worker had already decided on, set again unchanged.
+    The caller adds it in the same transaction as the change, so a change is never saved without its event.
+    No value goes into the event, only what kind of change it was (see classify_change)."""
+    origin = _value_origin(before)
+    other_fields: dict[str, list] = {}
+    for row in form.extracted_fields:
+        if row.field_name != field_name:
+            other_fields.setdefault(row.field_name, []).extend([_display_value(row), *_source_values(row).values()])
+    change = classify_change(
+        field_name,
+        _display_value(before) if before is not None else None,
+        after,
+        other_fields=other_fields,
+        machine_values=list(_source_values(before).values()) if origin == "manual" else [],  # undoing her own change
+    )
+    if origin != "machine" and change["change_kind"] == "none":
+        return None
+    if action == "edit" and change["change_kind"] == "none":
+        action = "confirm"  # "corrected" to the value it already showed
+    seen = set()
+    if change["change_kind"] not in ("none", "removed"):
+        key = match_key(field_name, after)
+        seen = {source for row in form.extracted_fields for source, value in _source_values(row).items()
+                if match_key(field_name, value) == key}
+        seen.update([picked_from] if picked_from else [])
+    evidence = (_from_json(before.evidence) or {}) if before is not None else {}
+    return FieldEvent(
+        form_id=form.id,
+        field_id=before.id if before is not None else None,
+        previous_event_id=_previous_event_id(session, form, before),
+        field_name=field_name,
+        action=action,
+        **change,
+        before_origin=origin,
+        before_written_as=_written_as(form, field_name, before),
+        before_status=before.status if before is not None else None,
+        before_confidence=before.confidence if before is not None else None,
+        before_sources=",".join(sorted(evidence.get("sources") or [])) or None,
+        correct_seen_by=",".join(sorted(seen)) or None,
+    )
 
 
 # ── Serialization (the only place ORM rows become dicts) ─────────────────────
@@ -347,26 +456,35 @@ def add_manual_field(
     if picked_from is not None:
         _require_in(picked_from, SOURCE_LABELS, "source")
     with SessionLocal() as session, session.begin():
-        form = session.get(Form, form_id, options=[selectinload(Form.extracted_fields)])
+        form = _lock_form(session, form_id)
         if form is None:
             raise LookupError(f"Form {form_id} not found.")
         existing = [row for row in form.extracted_fields if row.field_name == field_name]
         has_value = any(row.status != "not_found" for row in existing)
         if field_name not in MULTI_VALUE_FIELDS and has_value and not replace:
             raise ValueError(f"{field_name} already has a value — edit it instead.")
+        replaced = [row for row in existing if row.status != "not_found" and replace and field_name not in MULTI_VALUE_FIELDS]
+        placeholder = next((row for row in existing if row.status == "not_found"), None)
+        event = _correction_event(session, form, field_name, "replace" if replaced else "add",
+                                  replaced[0] if replaced else placeholder, value, picked_from=picked_from)
         for row in existing:
             # The "not found" placeholder always goes; a single-value field's old value goes when replaced.
             if row.status == "not_found" or (replace and field_name not in MULTI_VALUE_FIELDS):
                 form.extracted_fields.remove(row)
         coordinates = {key: float(box[key]) for key in ("x", "y", "width", "height")} if box else {}
         _mark_rejected(form, field_name, value, rejected=False)  # set again on purpose: no longer rejected
-        form.extracted_fields.append(ExtractedField(
+        added = ExtractedField(
             field_name=field_name, value=value, corrected_value=value, status="confirmed",
             evidence=_to_json({"manual": True, **({"picked_from": picked_from} if picked_from else {})}),
             box_source=picked_from if box else None,
             **coordinates,
-        ))
+        )
+        form.extracted_fields.append(added)
         session.flush()
+        if event is not None:
+            event.field_id = added.id  # the field as it is now — the row it replaced is gone
+            session.add(event)
+            session.flush()
         _recalculate_form_status(session, form, keep_pending=True)
         return form_to_dict(form, with_sources=True)
 
@@ -375,16 +493,21 @@ def delete_field(form_id: int, field_id: int) -> dict[str, Any]:
     """Remove a value the lab worker rejected. It is remembered as rejected, so re-extraction never puts it back;
     a field left with no value gets a 'not found' row — it still needs her decision (fill it or confirm it empty)."""
     with SessionLocal() as session, session.begin():
-        form = session.get(Form, form_id, options=[selectinload(Form.extracted_fields)])
+        form = _lock_form(session, form_id)
         row = next((r for r in form.extracted_fields if r.id == field_id), None) if form else None
         if row is None:
             raise LookupError(f"Field {field_id} not found for form {form_id}.")
-        value = row.corrected_value or row.value or row.llm_value
+        value = _display_value(row)
+        event = None
         if value:
+            event = _correction_event(session, form, row.field_name, "delete", row, None)
             _mark_rejected(form, row.field_name, value, rejected=True)
+            event.field_id = None  # the row is deleted in this transaction
         form.extracted_fields.remove(row)
         if not any(other.field_name == row.field_name for other in form.extracted_fields):
             form.extracted_fields.append(_empty_field(form, row.field_name))
+        if event is not None:
+            session.add(event)
         session.flush()
         _recalculate_form_status(session, form, keep_pending=True)
         return form_to_dict(form, with_sources=True)
@@ -393,24 +516,35 @@ def delete_field(form_id: int, field_id: int) -> dict[str, Any]:
 def confirm_field(form_id: int, field_id: int, corrected_value: str | None) -> dict[str, Any]:
     """Human approval of one field value (optionally corrected)."""
     with SessionLocal() as session, session.begin():
-        row = session.execute(
-            select(ExtractedField).where(ExtractedField.id == field_id, ExtractedField.form_id == form_id)
-        ).scalar_one_or_none()
+        form = _lock_form(session, form_id)
+        row = next((r for r in form.extracted_fields if r.id == field_id), None) if form else None
         if row is None:
             raise LookupError(f"Field {field_id} not found for form {form_id}.")
 
         if corrected_value is not None:
             corrected_value = _manual_value(row.field_name, corrected_value.strip())
-        if corrected_value is not None and corrected_value != row.value:
+        changed = corrected_value is not None and corrected_value != row.value
+        event = _correction_event(session, form, row.field_name, "edit" if changed else "confirm", row,
+                                  corrected_value if changed else _display_value(row))
+        if changed:
             row.corrected_value = corrected_value
             row.value = corrected_value
         if row.value:
-            _mark_rejected(row.form, row.field_name, row.value, rejected=False)
+            _mark_rejected(form, row.field_name, row.value, rejected=False)
         row.status = "confirmed"
+        if event is not None:
+            session.add(event)
         session.flush()
 
-        _recalculate_form_status(session, row.form, keep_pending=True)
-        return form_to_dict(row.form, with_sources=True)
+        _recalculate_form_status(session, form, keep_pending=True)
+        return form_to_dict(form, with_sources=True)
+
+
+def list_field_events(form_id: int) -> list[dict[str, Any]]:
+    """The correction history of one form, oldest first."""
+    with SessionLocal() as session:
+        rows = session.execute(select(FieldEvent).where(FieldEvent.form_id == form_id).order_by(FieldEvent.id)).scalars()
+        return [{column.name: getattr(row, column.name) for column in FieldEvent.__table__.columns} for row in rows]
 
 
 # ── Listing (paging, filtering, sorting — all in SQL) ────────────────────────

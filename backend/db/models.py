@@ -5,7 +5,19 @@ from datetime import datetime
 from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, MetaData, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from .constants import CONFIDENCE_LEVELS, FIELDS, FIELD_STATUSES, FORM_STATUSES, FORM_TYPES, SENDER_KINDS, SOURCE_LABELS
+from .constants import (
+    CHANGE_KINDS,
+    CONFIDENCE_LEVELS,
+    FIELD_EVENT_ACTIONS,
+    FIELDS,
+    FIELD_STATUSES,
+    FORM_STATUSES,
+    FORM_TYPES,
+    INVENTORY_KINDS,
+    SENDER_KINDS,
+    SOURCE_LABELS,
+    VALUE_ORIGINS,
+)
 
 
 class Base(DeclarativeBase):
@@ -95,6 +107,52 @@ class ExtractedField(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 
     form: Mapped[Form] = relationship(back_populates="extracted_fields")
+
+
+class FieldEvent(Base):
+    """One action of the lab worker on a field — appended, never updated: the correction history.
+
+    Holds no field values (they may identify the patient): only what kind of change it was and the field's state
+    just before it. The values stay in extracted_fields, reached through form_id / field_id. field_id is the field
+    as it is after the action (the new row when a value was replaced), and NULL once that row is deleted —
+    `previous_event_id` keeps the history of one value connected across those rows.
+    Source lists (`before_sources`, `correct_seen_by`) are comma-separated SOURCE_LABELS keys.
+    """
+
+    __tablename__ = "field_events"
+    __table_args__ = (
+        CheckConstraint(f"field_name IN {in_clause(FIELDS)}", name="field_name"),
+        CheckConstraint(f"action IN {in_clause(FIELD_EVENT_ACTIONS)}", name="action"),
+        CheckConstraint(f"change_kind IN {in_clause(CHANGE_KINDS)}", name="change_kind"),
+        CheckConstraint(f"(matched_field IN {in_clause(FIELDS)} OR matched_field IS NULL)", name="matched_field"),
+        CheckConstraint(f"before_origin IN {in_clause(VALUE_ORIGINS)}", name="before_origin"),
+        CheckConstraint(f"(before_status IN {in_clause(FIELD_STATUSES)} OR before_status IS NULL)", name="before_status"),
+        CheckConstraint(f"(before_confidence IN {in_clause(CONFIDENCE_LEVELS)} OR before_confidence IS NULL)", name="before_confidence"),
+        CheckConstraint(f"(before_written_as IN {in_clause(INVENTORY_KINDS)} OR before_written_as IS NULL)", name="before_written_as"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    form_id: Mapped[int] = mapped_column(Integer, ForeignKey("forms.id", ondelete="CASCADE"), nullable=False, index=True)
+    field_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("extracted_fields.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # The previous event of the same value (same row, the row it replaced, or the deletion it refills).
+    previous_event_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("field_events.id", ondelete="SET NULL"), nullable=True
+    )
+    field_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    change_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    chars_changed: Mapped[int | None] = mapped_column(Integer, nullable=True)  # set for a typo only
+    matched_field: Mapped[str | None] = mapped_column(String(64), nullable=True)  # wrong_field / removed: where it was
+    digit_swaps: Mapped[str | None] = mapped_column(String(32), nullable=True)  # typo: "1>7,0>8" — no value, only the swap
+    before_origin: Mapped[str] = mapped_column(String(32), nullable=False)
+    before_written_as: Mapped[str | None] = mapped_column(String(16), nullable=True)  # INVENTORY_KINDS, as the AI saw it
+    before_status: Mapped[str | None] = mapped_column(String(32), nullable=True)  # NULL: the field had no row
+    before_confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    before_sources: Mapped[str | None] = mapped_column(String(64), nullable=True)  # sources behind the shown value
+    correct_seen_by: Mapped[str | None] = mapped_column(String(64), nullable=True)  # sources that read the new value
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 
 
 class Sender(Base):
