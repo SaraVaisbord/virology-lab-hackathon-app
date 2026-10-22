@@ -7,6 +7,12 @@ exported to Excel as **one row per commitment number**.
 
 ---
 
+
+
+Uploading דמו_האקתון_שרה_וייסבורד_דקה.mp4…
+
+
+
 ## Highlights
 
 - **Three independent readings per page** — barcodes, local OCR, and a vision LLM. A value is marked *verified* only
