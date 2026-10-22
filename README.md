@@ -9,7 +9,10 @@ exported to Excel as **one row per commitment number**.
 
 
 
-Uploading דמו_האקתון_שרה_וייסבורד_דקה.mp4…
+
+
+https://github.com/user-attachments/assets/88487fcd-4bd3-41a1-bdfe-21326a9ba592
+
 
 
 
