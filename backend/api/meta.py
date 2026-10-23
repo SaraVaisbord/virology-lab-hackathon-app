@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-import config
+from api.dependencies import get_settings
+from config import Settings
 from domain.vocabulary import (
     AGREEMENT_LABELS,
     BARCODE_MATCH_LABELS,
@@ -34,7 +35,7 @@ router = APIRouter(prefix="/meta", tags=["meta"])
 
 
 @router.get("")
-def get_meta():
+def get_meta(settings: Settings = Depends(get_settings)):
     return {
         "fields": [
             # kind (text / number / id / date): which numbers found on the page are offered as options for the field
@@ -60,10 +61,10 @@ def get_meta():
         "form_types": FORM_TYPE_LABELS,
         "written_as_labels": INVENTORY_KIND_LABELS,  # how a value is written on the page
         "upload": {
-            "max_file_size_mb": config.MAX_FILE_SIZE_MB,
+            "max_file_size_mb": settings.max_file_size_mb,
             "accepted_mime_types": [spec["mime"] for spec in UPLOAD_TYPES.values()],
             "accepted_extensions": [ext for spec in UPLOAD_TYPES.values() for ext in spec["extensions"]],
         },
-        "page_size": config.DEFAULT_PAGE_SIZE,
-        "poll_interval_ms": config.PROCESSING_POLL_INTERVAL_MS,
+        "page_size": settings.default_page_size,
+        "poll_interval_ms": settings.processing_poll_interval_ms,
     }

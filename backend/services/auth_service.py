@@ -1,4 +1,4 @@
-"""Login with a one-time code mailed to one mailbox (config.AUTH_EMAIL).
+"""Login with a one-time code mailed to one mailbox (AuthSettings.email).
 
 request_code() mails a 6-digit code; verify_code() checks it and returns a signed session token for the cookie.
 The pending code lives in memory — the backend runs as a single process (one replica), and a restart only voids a
@@ -13,18 +13,13 @@ import hmac
 import logging
 import secrets
 import smtplib
-import ssl
 import threading
 import time
-from email.message import EmailMessage
+from dataclasses import dataclass
 
-import config
+from integrations.mailer import Mailer
 
 logger = logging.getLogger(__name__)
-
-_SECRET = (config.AUTH_SECRET or secrets.token_hex(32)).encode()
-_lock = threading.Lock()
-_pending: dict[str, float | int | str] = {}  # {"hash", "expires", "attempts", "sent"}
 
 
 class AuthError(Exception):
@@ -35,94 +30,102 @@ class AuthNotConfiguredError(AuthError):
     pass
 
 
-def _hash(code: str) -> str:
-    return hmac.new(_SECRET, code.encode(), hashlib.sha256).hexdigest()
+@dataclass(frozen=True)
+class AuthSettings:
+    enabled: bool
+    email: str  # the mailbox that receives the codes
+    mail_configured: bool  # the SMTP server is set up
+    demo_code: str  # DEMO ONLY: nothing is mailed and this fixed code always logs in
+    secret: str  # signs session tokens; empty → a random one per run
+    code_ttl_minutes: int
+    code_max_attempts: int
+    code_resend_seconds: int
+    session_hours: int
 
 
-def _send_mail(code: str) -> None:
-    message = EmailMessage()
-    message["Subject"] = f"קוד כניסה למערכת אימות הטפסים: {code}"
-    message["From"] = config.SMTP_FROM
-    message["To"] = config.AUTH_EMAIL
-    message.set_content(
-        f"קוד הכניסה שלך: {code}\n\nהקוד תקף ל-{config.AUTH_CODE_TTL_MINUTES} דקות ולשימוש אחד.\n"
-        "אם לא ביקשת קוד – אפשר להתעלם מההודעה."
-    )
-    context = ssl.create_default_context()
-    if config.SMTP_PORT == 465:
-        with smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=config.SMTP_TIMEOUT_SECONDS, context=context) as smtp:
-            smtp.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
-            smtp.send_message(message)
-    else:
-        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=config.SMTP_TIMEOUT_SECONDS) as smtp:
-            smtp.starttls(context=context)
-            smtp.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
-            smtp.send_message(message)
-
-
-def masked_email(address: str | None = None) -> str:
-    """A mailbox, partly hidden, for the login screen ("ad***@domain.org"). Default: config.AUTH_EMAIL."""
-    name, _, domain = (address if address is not None else config.AUTH_EMAIL).strip().partition("@")
+def masked_email(address: str) -> str:
+    """A mailbox, partly hidden, for the login screen ("ad***@domain.org")."""
+    name, _, domain = address.strip().partition("@")
     return f"{name[:2]}***@{domain}" if name and domain else ""
 
 
-def request_code(email: str | None = None) -> str:
-    """Send a code; returns the (masked) address it went to. In demo mode (config.AUTH_DEMO_CODE) nothing is sent:
-    the typed address is only echoed back and the fixed code becomes the pending one."""
-    demo = bool(config.AUTH_DEMO_CODE)
-    if demo and not masked_email(email or ""):
-        raise AuthError("יש להזין כתובת מייל תקינה")
-    if not demo and not (config.AUTH_EMAIL and config.SMTP_HOST and config.SMTP_USERNAME and config.SMTP_PASSWORD):
-        raise AuthNotConfiguredError("שליחת קוד לא הוגדרה בשרת (AUTH_EMAIL / SMTP_*)")
-    now = time.time()
-    with _lock:
-        wait = float(_pending.get("sent", 0)) + config.AUTH_CODE_RESEND_SECONDS - now
-        if wait > 0:
-            raise AuthError(f"קוד נשלח זה עתה – אפשר לבקש קוד חדש בעוד {int(wait) + 1} שניות")
-        code = config.AUTH_DEMO_CODE or f"{secrets.randbelow(1_000_000):06d}"
-        _pending.clear()
-        _pending.update(hash=_hash(code), expires=now + config.AUTH_CODE_TTL_MINUTES * 60, attempts=0, sent=now)
-    if demo:
-        logger.info("Login code requested (demo mode — no mail sent)")
-        return masked_email(email)
-    try:
-        _send_mail(code)
-    except (smtplib.SMTPException, OSError) as exc:
-        with _lock:
-            _pending.clear()
-        logger.error("Login code mail failed: %s", type(exc).__name__)
-        raise AuthError("שליחת המייל נכשלה – בדקי את הגדרות ה-SMTP בשרת") from None
-    logger.info("Login code sent")
-    return masked_email()
+class AuthService:
+    def __init__(self, settings: AuthSettings, mailer: Mailer) -> None:
+        self.settings = settings
+        self._mailer = mailer
+        self._secret = (settings.secret or secrets.token_hex(32)).encode()
+        self._lock = threading.Lock()
+        self._pending: dict[str, float | int | str] = {}  # {"hash", "expires", "attempts", "sent"}
 
+    def _hash(self, code: str) -> str:
+        return hmac.new(self._secret, code.encode(), hashlib.sha256).hexdigest()
 
-def verify_code(code: str) -> str:
-    """The session token for a correct code (the code is then used up)."""
-    code = (code or "").strip()
-    with _lock:
-        if not _pending or time.time() > float(_pending["expires"]):
-            _pending.clear()
-            raise AuthError("אין קוד בתוקף – יש לבקש קוד חדש")
-        _pending["attempts"] = int(_pending["attempts"]) + 1
-        if not hmac.compare_digest(_hash(code), str(_pending["hash"])):
-            if int(_pending["attempts"]) >= config.AUTH_CODE_MAX_ATTEMPTS:
-                _pending.clear()
-                raise AuthError("יותר מדי ניסיונות שגויים – יש לבקש קוד חדש")
-            raise AuthError("הקוד שגוי")
-        _pending.clear()
-    logger.info("Login succeeded")
-    return create_session()
+    def masked_email(self) -> str:
+        return masked_email(self.settings.email)
 
+    def _send_code(self, code: str) -> None:
+        self._mailer.send(
+            self.settings.email,
+            f"קוד כניסה למערכת אימות הטפסים: {code}",
+            f"קוד הכניסה שלך: {code}\n\nהקוד תקף ל-{self.settings.code_ttl_minutes} דקות ולשימוש אחד.\n"
+            "אם לא ביקשת קוד – אפשר להתעלם מההודעה.",
+        )
 
-def create_session() -> str:
-    expires = str(int(time.time() + config.AUTH_SESSION_HOURS * 3600))
-    signature = hmac.new(_SECRET, expires.encode(), hashlib.sha256).digest()
-    return f"{expires}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+    def request_code(self, email: str | None = None) -> str:
+        """Send a code; returns the (masked) address it went to. In demo mode nothing is sent: the typed address is
+        only echoed back and the fixed code becomes the pending one."""
+        settings = self.settings
+        demo = bool(settings.demo_code)
+        if demo and not masked_email(email or ""):
+            raise AuthError("יש להזין כתובת מייל תקינה")
+        if not demo and not (settings.email and settings.mail_configured):
+            raise AuthNotConfiguredError("שליחת קוד לא הוגדרה בשרת (AUTH_EMAIL / SMTP_*)")
+        now = time.time()
+        with self._lock:
+            wait = float(self._pending.get("sent", 0)) + settings.code_resend_seconds - now
+            if wait > 0:
+                raise AuthError(f"קוד נשלח זה עתה – אפשר לבקש קוד חדש בעוד {int(wait) + 1} שניות")
+            code = settings.demo_code or f"{secrets.randbelow(1_000_000):06d}"
+            self._pending.clear()
+            self._pending.update(hash=self._hash(code), expires=now + settings.code_ttl_minutes * 60, attempts=0, sent=now)
+        if demo:
+            logger.info("Login code requested (demo mode — no mail sent)")
+            return masked_email(email or "")
+        try:
+            self._send_code(code)
+        except (smtplib.SMTPException, OSError) as exc:
+            with self._lock:
+                self._pending.clear()
+            logger.error("Login code mail failed: %s", type(exc).__name__)
+            raise AuthError("שליחת המייל נכשלה – בדקי את הגדרות ה-SMTP בשרת") from None
+        logger.info("Login code sent")
+        return self.masked_email()
 
+    def verify_code(self, code: str) -> str:
+        """The session token for a correct code (the code is then used up)."""
+        code = (code or "").strip()
+        with self._lock:
+            if not self._pending or time.time() > float(self._pending["expires"]):
+                self._pending.clear()
+                raise AuthError("אין קוד בתוקף – יש לבקש קוד חדש")
+            self._pending["attempts"] = int(self._pending["attempts"]) + 1
+            if not hmac.compare_digest(self._hash(code), str(self._pending["hash"])):
+                if int(self._pending["attempts"]) >= self.settings.code_max_attempts:
+                    self._pending.clear()
+                    raise AuthError("יותר מדי ניסיונות שגויים – יש לבקש קוד חדש")
+                raise AuthError("הקוד שגוי")
+            self._pending.clear()
+        logger.info("Login succeeded")
+        return self.create_session()
 
-def session_is_valid(token: str | None) -> bool:
-    expires, _, signature = (token or "").partition(".")
-    if not expires.isdigit() or not signature:
-        return False
-    expected = base64.urlsafe_b64encode(hmac.new(_SECRET, expires.encode(), hashlib.sha256).digest()).decode().rstrip("=")
-    return hmac.compare_digest(signature, expected) and int(expires) > time.time()
+    def create_session(self) -> str:
+        expires = str(int(time.time() + self.settings.session_hours * 3600))
+        signature = hmac.new(self._secret, expires.encode(), hashlib.sha256).digest()
+        return f"{expires}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+    def session_is_valid(self, token: str | None) -> bool:
+        expires, _, signature = (token or "").partition(".")
+        if not expires.isdigit() or not signature:
+            return False
+        expected = base64.urlsafe_b64encode(hmac.new(self._secret, expires.encode(), hashlib.sha256).digest()).decode().rstrip("=")
+        return hmac.compare_digest(signature, expected) and int(expires) > time.time()

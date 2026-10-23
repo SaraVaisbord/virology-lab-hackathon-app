@@ -15,10 +15,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
-import config
-from db import queries
-from domain.vocabulary import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_COLUMN_LABELS, FORM_STATUS_LABELS, MULTI_VALUE_FIELDS, ROW_KEY_FIELD
+from db.repositories import FormFilters, FormListing
 from domain.validators import digits_only
+from domain.vocabulary import EXPORT_COLUMN_LABELS, EXPORT_MODE_LABELS, FIELD_LABELS, FORM_COLUMN_LABELS, FORM_STATUS_LABELS, MULTI_VALUE_FIELDS, ROW_KEY_FIELD
 
 _MULTI_VALUE_SEPARATOR = ", "
 _DATE_FORMAT = "yyyy-mm-dd hh:mm"
@@ -59,8 +58,29 @@ def form_rows(form: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def build_forms_workbook(filters: queries.FormFilters) -> bytes:
-    forms, _total = queries.list_forms(filters, limit=config.EXPORT_MAX_ROWS)
+def filters_for_mode(mode: str, filters: FormFilters) -> FormFilters:
+    """The forms an export mode covers: "all" (every form), "approved", or the table as filtered on screen."""
+    if mode not in EXPORT_MODE_LABELS:
+        raise ValueError(f"Unknown export mode: {mode!r}")
+    if mode == "all":
+        return FormFilters(sort_by=filters.sort_by, sort_dir=filters.sort_dir)
+    if mode == "approved":
+        return FormFilters(status="approved", sort_by=filters.sort_by, sort_dir=filters.sort_dir)
+    return filters
+
+
+class ExportService:
+    def __init__(self, listing: FormListing, max_rows: int) -> None:
+        self._listing = listing
+        self._max_rows = max_rows
+
+    def build_forms_workbook(self, mode: str, filters: FormFilters) -> bytes:
+        """The .xlsx of the forms the mode covers (filters_for_mode); ValueError for an unknown mode or filter."""
+        forms, _total = self._listing.list_forms(filters_for_mode(mode, filters), limit=self._max_rows)
+        return _workbook(forms)
+
+
+def _workbook(forms: list[dict[str, Any]]) -> bytes:
 
     wb = Workbook()
     ws = wb.active

@@ -47,8 +47,7 @@ def test_no_history_yet(client):
                                 "auto_accepted_fields": 0, "by_field": []}
 
 
-def test_not_enough_corrections_yet(client):
-    from db import queries
+def test_not_enough_corrections_yet(client, queries):
 
     for _ in range(2):
         _reviewed_form(queries)  # 4 reviewed values each: 8 < 20
@@ -58,8 +57,7 @@ def test_not_enough_corrections_yet(client):
     assert "נבדקו 8 ערכים" in body["message"]
 
 
-def test_insights_from_recurring_corrections(client):
-    from db import queries
+def test_insights_from_recurring_corrections(client, queries):
 
     queries.add_sender("כללית", "health_fund")
     for _ in range(8):
@@ -93,8 +91,7 @@ def test_insights_from_recurring_corrections(client):
     _assert_no_values(response)
 
 
-def test_filters_and_coverage(client):
-    from db import queries
+def test_filters_and_coverage(client, queries):
 
     for _ in range(8):
         _reviewed_form(queries)
@@ -144,11 +141,14 @@ def _event(field_name, change_kind, minute, **extra):
             "created_at": datetime(2026, 10, 22, 9, minute), **extra}
 
 
-def test_build_insights_patterns_and_thresholds(monkeypatch):
-    import config
+def test_build_insights_patterns_and_thresholds():
+    from dataclasses import replace
+
+    from config import load_settings
+    from container import insight_thresholds
     from services.insights_service import build_insights
 
-    monkeypatch.setattr(config, "INSIGHTS_MIN_REVIEWED_FIELDS", 10)
+    thresholds = replace(insight_thresholds(load_settings()), min_reviewed_fields=10)
     events = (
         [_event("commitment_number", "wrong_field", i, matched_field="central_number", form_type="leumit") for i in range(3)]
         + [_event("received_date", "day_month_swap", 10 + i) for i in range(3)]
@@ -157,7 +157,7 @@ def test_build_insights_patterns_and_thresholds(monkeypatch):
         + [_event("id_number", "none", 40 + i) for i in range(20)]  # approvals: reviewed, never a pattern
         + [_event("id_number", "typo", 59, before_origin="manual")]  # her own value changed: not counted at all
     )
-    result = build_insights(events)
+    result = build_insights(events, thresholds)
     assert result["coverage"]["reviewed_fields"] == 31
     found = {(i["pattern_type"], i["field_name"]): i for i in result["insights"]}
     assert set(found) == {
@@ -172,4 +172,4 @@ def test_build_insights_patterns_and_thresholds(monkeypatch):
 
     # A field corrected in only a small share of its reviewed values is not "often corrected".
     rare = [_event("id_number", "typo", 0) for _ in range(3)] + [_event("id_number", "none", 1) for _ in range(30)]
-    assert build_insights(rare)["insights"] == []
+    assert build_insights(rare, thresholds)["insights"] == []

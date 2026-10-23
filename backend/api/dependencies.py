@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from fastapi import Depends, Request
 
+from config import Settings
 from container import Container
-from services.extraction_queue import ExtractionQueue
 
 
 def get_container(request: Request) -> Container:
     return request.app.state.container
 
 
-def get_queue(container: Container = Depends(get_container)) -> ExtractionQueue:
-    return container.queue
+def get_settings(container: Container = Depends(get_container)) -> Settings:
+    return container.settings

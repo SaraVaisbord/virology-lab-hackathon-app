@@ -5,21 +5,32 @@ from __future__ import annotations
 import pytest
 
 
-@pytest.fixture
-def auth_client(client, monkeypatch):
-    """The app with login on and mail configured; returns (client, sent codes)."""
-    import config
-    from services import auth_service
+class _SentCodes(list):
+    """A fake mailer: keeps the code of every mail (the last word of the subject)."""
 
-    monkeypatch.setattr(config, "AUTH_ENABLED", True)
-    for name, value in (("AUTH_EMAIL", "lab@example.org"), ("SMTP_HOST", "smtp.example.org"),
-                        ("SMTP_USERNAME", "lab@example.org"), ("SMTP_PASSWORD", "x")):
-        monkeypatch.setattr(config, name, value)
-    monkeypatch.setattr(config, "AUTH_CODE_RESEND_SECONDS", 0)
-    auth_service._pending.clear()
-    sent = []
-    monkeypatch.setattr(auth_service, "_send_mail", sent.append)
-    return client, sent
+    def send(self, to, subject, body):
+        self.append(subject.rsplit(" ", 1)[-1])
+
+
+@pytest.fixture
+def auth_app(make_container):
+    """auth_app(**setting_overrides) → (client, sent codes): the app with login on and mail configured."""
+    from fastapi.testclient import TestClient
+
+    from api.app import create_app
+
+    def make(**overrides):
+        sent = _SentCodes()
+        settings = {"auth_enabled": True, "auth_email": "lab@example.org", "smtp_host": "smtp.example.org",
+                    "smtp_username": "lab@example.org", "smtp_password": "x", "auth_code_resend_seconds": 0, **overrides}
+        container = make_container(mailer=sent, **settings)
+        return TestClient(create_app(container=container)), sent
+    return make
+
+
+@pytest.fixture
+def auth_client(auth_app):
+    return auth_app()
 
 
 def test_everything_but_login_needs_a_session(auth_client):
@@ -50,11 +61,8 @@ def test_code_login_and_logout(auth_client):
     assert client.get("/forms").status_code == 401
 
 
-def test_wrong_codes_void_the_code(auth_client, monkeypatch):
-    import config
-
-    client, sent = auth_client
-    monkeypatch.setattr(config, "AUTH_CODE_MAX_ATTEMPTS", 3)
+def test_wrong_codes_void_the_code(auth_app):
+    client, sent = auth_app(auth_code_max_attempts=3)
     client.post("/auth/request-code")
     wrong = "000000" if sent[0] != "000000" else "111111"
     for _ in range(3):
@@ -63,38 +71,29 @@ def test_wrong_codes_void_the_code(auth_client, monkeypatch):
     assert client.post("/auth/verify", json={"code": sent[0]}).status_code == 400
 
 
-def test_expired_code_and_forged_session(auth_client, monkeypatch):
-    import config
-    from services import auth_service
-
-    client, sent = auth_client
-    monkeypatch.setattr(config, "AUTH_CODE_TTL_MINUTES", 0)
+def test_expired_code_and_forged_session(auth_app):
+    client, sent = auth_app(auth_code_ttl_minutes=0)
+    auth_service = client.app.state.container.auth
     client.post("/auth/request-code")
     assert client.post("/auth/verify", json={"code": sent[0]}).json()["detail"] == "אין קוד בתוקף – יש לבקש קוד חדש"
 
-    client.cookies.set(config.AUTH_COOKIE_NAME, "9999999999.forged")
+    client.cookies.set(client.app.state.container.settings.auth_cookie_name, "9999999999.forged")
     assert client.get("/forms").status_code == 401
     assert auth_service.session_is_valid(auth_service.create_session())
 
 
-def test_resend_is_rate_limited_and_unconfigured_mail_is_reported(auth_client, monkeypatch):
-    import config
-
-    client, _ = auth_client
-    monkeypatch.setattr(config, "AUTH_CODE_RESEND_SECONDS", 60)
+def test_resend_is_rate_limited_and_unconfigured_mail_is_reported(auth_app):
+    client, _ = auth_app(auth_code_resend_seconds=60)
     assert client.post("/auth/request-code").status_code == 200
     assert "בעוד" in client.post("/auth/request-code").json()["detail"]
 
-    monkeypatch.setattr(config, "SMTP_HOST", "")
-    assert client.post("/auth/request-code").status_code == 503
+    unconfigured, _ = auth_app(smtp_host="")
+    assert unconfigured.post("/auth/request-code").status_code == 503
 
 
-def test_demo_mode_any_address_and_the_fixed_code(auth_client, monkeypatch):
+def test_demo_mode_any_address_and_the_fixed_code(auth_app):
     """AUTH_DEMO_CODE: nothing is mailed, any typed address is accepted, the fixed code logs in."""
-    import config
-
-    client, sent = auth_client
-    monkeypatch.setattr(config, "AUTH_DEMO_CODE", "424242")
+    client, sent = auth_app(auth_demo_code="424242")
     assert client.get("/auth/status").json()["ask_email"] is True
     assert client.post("/auth/request-code", json={"email": "not-an-address"}).status_code == 400
     assert client.post("/auth/request-code", json={"email": "dana@lab.org"}).json() == {"email": "da***@lab.org"}

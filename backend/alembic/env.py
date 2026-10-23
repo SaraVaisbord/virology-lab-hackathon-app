@@ -5,8 +5,11 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from config import load_settings
 from db.models import Base
-from db.session import DATABASE_URL
+
+# The database of the current environment (DATABASE_URL / APP_DATA_DIR, as the server reads them).
+DATABASE_URL = load_settings().database_url
 
 config = context.config
 

@@ -30,10 +30,12 @@ import numpy as np
 import pymupdf
 from PIL import Image
 
-import barcode_reader
-import ocr_reader
+from config import load_settings
+from container import build_ocr
 from domain.vocabulary import LOCAL_LABEL_LEXICON
-from preprocessing import preprocess
+from integrations.imaging.barcode import scan_pil_image
+from integrations.imaging.preprocessing import preprocess
+from integrations.ocr.base import OcrEngine
 
 MIN_CONFIDENCE = 60
 # The label words the local extractor looks for (one source: the label lexicon).
@@ -71,12 +73,12 @@ def load_native_page(pdf: Path) -> tuple[np.ndarray, float]:
 def decode_barcodes(images: list[np.ndarray]) -> set[str]:
     found: set[str] = set()
     for image in images:
-        found |= {b["data"] for b in barcode_reader.scan_pil_image(Image.fromarray(image).convert("RGB"))}
+        found |= {b["data"] for b in scan_pil_image(Image.fromarray(image).convert("RGB"))}
     return found
 
 
-def ocr_metrics(image: np.ndarray) -> dict:
-    words = [w for w in ocr_reader.read_words(image) if w.confidence >= MIN_CONFIDENCE]
+def ocr_metrics(ocr: OcrEngine, image: np.ndarray) -> dict:
+    words = [w for w in ocr.read_words(image) if w.confidence >= MIN_CONFIDENCE]
     numbers = {_digits(w.text) for w in words if len(_digits(w.text)) >= 4}
     labels = {k for w in words for k in LABEL_KEYWORDS if k in w.text}
     return {"words": len(words), "numbers": numbers, "labels": labels}
@@ -99,6 +101,7 @@ def main() -> None:
     parser.add_argument("folder", type=Path)
     parser.add_argument("--reference-db", type=Path)
     args = parser.parse_args()
+    ocr = build_ocr(load_settings())
     reference = load_reference(args.reference_db) if args.reference_db else {}
 
     totals = {key: [0, 0] for key in ("barcodes", "words", "numbers", "labels", "ref_found")}
@@ -108,12 +111,12 @@ def main() -> None:
         started = time.time()
         old = load_old_page(pdf)
         native, dpi = load_native_page(pdf)
-        views = preprocess(native, source_dpi=dpi)
+        views = preprocess(native, source_dpi=dpi, ocr=ocr)
 
         old_bc = decode_barcodes([cv2.cvtColor(old, cv2.COLOR_BGR2GRAY)])
         new_bc = decode_barcodes(views.barcode_views)
-        old_ocr = ocr_metrics(cv2.cvtColor(old, cv2.COLOR_BGR2GRAY))
-        new_ocr = ocr_metrics(views.print_binary)
+        old_ocr = ocr_metrics(ocr, cv2.cvtColor(old, cv2.COLOR_BGR2GRAY))
+        new_ocr = ocr_metrics(ocr, views.print_binary)
 
         refs = reference.get(pdf.name, set())
         ref_total += len(refs)

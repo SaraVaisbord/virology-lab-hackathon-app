@@ -15,8 +15,7 @@ def test_meta_exposes_vocabulary(client):
     assert meta["page_size"] > 0
 
 
-def test_list_is_paged_and_validated(client):
-    from db import queries
+def test_list_is_paged_and_validated(client, queries):
 
     ids = [make_form(queries, file_hash=f"h{i}") for i in range(3)]
     body = client.get("/forms?limit=2").json()
@@ -28,8 +27,7 @@ def test_list_is_paged_and_validated(client):
     assert client.get("/forms?status=nope").status_code == 400
 
 
-def test_confirm_field_endpoint(client):
-    from db import queries
+def test_confirm_field_endpoint(client, queries):
 
     form_id = make_form(queries)
     queries.save_extraction(form_id, [{"field_name": "id_number", "value": "1", "status": "uncertain"}])
@@ -43,8 +41,7 @@ def test_confirm_field_endpoint(client):
     assert client.patch(f"/forms/{form_id}/fields/999/confirm", json={}).status_code == 404
 
 
-def test_retry_and_summary(client):
-    from db import queries
+def test_retry_and_summary(client, queries):
 
     form_id = make_form(queries)
     queries.set_form_status(form_id, "failed", error="x")
@@ -52,8 +49,7 @@ def test_retry_and_summary(client):
     assert client.get("/forms/summary").json()["pending"] == 1
 
 
-def test_export_respects_filters_and_mode(client):
-    from db import queries
+def test_export_respects_filters_and_mode(client, queries):
 
     keep = make_form(queries, file_hash="keep")
     make_form(queries, file_hash="skip")
@@ -75,11 +71,8 @@ def test_export_respects_filters_and_mode(client):
     assert client.get("/forms/export?mode=nope").status_code == 400
 
 
-def test_source_evidence_reaches_the_api(client):
+def test_source_evidence_reaches_the_api(client, queries, container):
     """Spec 7/8: per-source results and per-field evidence survive until the API response."""
-    from db import queries
-    import config
-    from container import verification_rules
     from domain.verification import build_fields
 
     form_id = make_form(queries)
@@ -87,7 +80,7 @@ def test_source_evidence_reaches_the_api(client):
     barcodes = [{"data": "2646", "type": "CODE39", "x": 0.1, "y": 0.1, "width": 0.1, "height": 0.1, "page": 1}]
     queries.save_source_results(form_id, llm_result=llm, barcode_result={"status": "ok", "items": barcodes},
                                 ocr_result={"status": "unavailable", "items": []})
-    queries.save_extraction(form_id, build_fields(llm, barcodes, [], verification_rules(config)))
+    queries.save_extraction(form_id, build_fields(llm, barcodes, [], container.pipeline.rules))
 
     detail = client.get(f"/forms/{form_id}").json()
     assert detail["sources"]["llm_result"] == llm
@@ -103,9 +96,8 @@ def test_source_evidence_reaches_the_api(client):
     assert listed["fields"][0]["evidence"] is not None or listed["fields"][0]["status"] == "not_found"
 
 
-def test_disabled_worker_is_reported_in_summary(client):
+def test_disabled_worker_is_reported_in_summary(client, queries):
     """With WORKER_ENABLED=false the queue never starts — the UI must be told why nothing is processed."""
-    from db import queries
 
     make_form(queries)
     summary = client.get("/forms/summary").json()
@@ -113,9 +105,8 @@ def test_disabled_worker_is_reported_in_summary(client):
     assert summary["queue"] == {"running": False, "paused_until": None, "pause_reason": "disabled"}
 
 
-def test_manual_add_edit_delete_without_extraction(client):
+def test_manual_add_edit_delete_without_extraction(client, queries):
     """The lab worker can fill a form by hand, whatever its extraction state."""
-    from db import queries
 
     form_id = make_form(queries)  # still queued — never extracted
     body = client.post(f"/forms/{form_id}/fields", json={"field_name": "commitment_number", "value": " 2646 "}).json()
@@ -140,8 +131,7 @@ def test_manual_add_edit_delete_without_extraction(client):
     assert client.delete(f"/forms/{form_id}/fields/{field_id}").status_code == 404
 
 
-def test_manual_value_replaces_not_found_and_completes_a_failed_form(client):
-    from db import queries
+def test_manual_value_replaces_not_found_and_completes_a_failed_form(client, queries):
 
     form_id = make_form(queries)
     queries.save_extraction(form_id, [{"field_name": "id_number", "status": "not_found"}])
@@ -152,8 +142,7 @@ def test_manual_value_replaces_not_found_and_completes_a_failed_form(client):
     assert body["status"] == "approved"
 
 
-def test_pick_a_page_number_into_a_field_keeps_its_location(client):
-    from db import queries
+def test_pick_a_page_number_into_a_field_keeps_its_location(client, queries):
 
     form_id = make_form(queries)
     queries.save_extraction(form_id, [{"field_name": "id_number", "value": "1", "llm_value": "1", "status": "uncertain"}])
@@ -189,8 +178,7 @@ def test_export_repeats_patient_details_on_every_commitment_row():
     assert all(row["central_number"] == "9001, 9002" and row["id_number"] == "000000026" for row in rows)
 
 
-def test_same_commitment_on_two_forms_is_flagged_with_where_it_is(client):
-    from db import queries
+def test_same_commitment_on_two_forms_is_flagged_with_where_it_is(client, queries):
 
     first, second, other = make_form(queries, file_hash="a"), make_form(queries, file_hash="b"), make_form(queries, file_hash="c")
     box = {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.04}
@@ -220,8 +208,7 @@ def test_meta_gives_field_kinds_and_the_date_pattern(client):
     assert re.search(meta["date_pattern"], "20.08.26") and meta["row_key_field"] == "commitment_number"
 
 
-def test_a_date_set_by_the_lab_worker_is_stored_like_extracted_dates(client):
-    from db import queries
+def test_a_date_set_by_the_lab_worker_is_stored_like_extracted_dates(client, queries):
 
     form_id = make_form(queries)
     body = client.post(f"/forms/{form_id}/fields", json={"field_name": "received_date", "value": "20.08.26"}).json()
@@ -229,9 +216,8 @@ def test_a_date_set_by_the_lab_worker_is_stored_like_extracted_dates(client):
     assert field["value"] == "20/08/2026"
 
 
-def test_a_deleted_value_never_comes_back_on_re_extraction(client):
+def test_a_deleted_value_never_comes_back_on_re_extraction(client, queries):
     """Bug seen 2026-10-21: the lab worker deleted a machine reading and re-extraction put it back."""
-    from db import queries
 
     form_id = make_form(queries)
     machine = [
@@ -260,17 +246,14 @@ def test_a_deleted_value_never_comes_back_on_re_extraction(client):
     assert body["rejected_values"] == {"sender": ["קפלן"]}
 
 
-def test_delete_a_form_removes_its_fields_and_files(client):
-    from db import queries
+def test_delete_a_form_removes_its_fields_and_files(client, queries, settings):
     from tests.conftest import png_bytes
 
     upload = client.post("/uploads", files={"files": ("scan.png", png_bytes(), "image/png")}).json()[0]
     (form_id,) = upload["form_ids"]
     queries.save_extraction(form_id, [{"field_name": "commitment_number", "value": "58153", "status": "verified"}])
     image_key = queries.get_form(form_id)["image_path"]
-    import config
-
-    data_dir = config.DATA_DIR
+    data_dir = settings.data_dir
     assert (data_dir / image_key).is_file() and any((data_dir / "uploads").iterdir())
 
     assert client.delete(f"/forms/{form_id}").status_code == 204
@@ -282,9 +265,7 @@ def test_delete_a_form_removes_its_fields_and_files(client):
     assert client.post("/uploads", files={"files": ("scan.png", png_bytes(), "image/png")}).json()[0]["status"] == "created"
 
 
-def test_a_form_being_processed_cannot_be_deleted(client):
-    from db import queries
-
+def test_a_form_being_processed_cannot_be_deleted(client, queries):
     form_id = make_form(queries)
     queries.set_form_status(form_id, "processing")
     response = client.delete(f"/forms/{form_id}")

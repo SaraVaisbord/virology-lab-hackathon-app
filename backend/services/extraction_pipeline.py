@@ -64,6 +64,10 @@ class ExtractionPipeline:
     def llm_providers(self) -> list[str]:
         return self._llm.known
 
+    @property
+    def rules(self) -> VerificationRules:
+        return self._rules
+
     # ── Sources ──────────────────────────────────────────────────────────────
 
     def _barcode_scan(self, views: PageViews, page: int | None) -> dict[str, Any]:

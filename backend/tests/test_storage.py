@@ -76,23 +76,24 @@ def test_s3_storage_uses_the_bucket_and_prefix(monkeypatch):
     assert fake.objects == {}
 
 
-def test_upload_and_image_endpoint_go_through_the_configured_storage(client, monkeypatch):
+def test_upload_and_image_endpoint_go_through_the_configured_storage(make_container, monkeypatch):
     """With STORAGE_BACKEND=s3 nothing is written to the local data folder — the page is served from the bucket."""
-    import config
+    from fastapi.testclient import TestClient
+
+    from api.app import create_app
     from tests.conftest import png_bytes
 
     fake = _FakeS3()
     monkeypatch.setattr(storage, "_boto3_client", lambda region: fake)
-    monkeypatch.setattr(config, "STORAGE_BACKEND", "s3")
-    monkeypatch.setattr(config, "S3_BUCKET", "lab-bucket")
-    monkeypatch.setattr(config, "S3_PREFIX", "")
+    container = make_container(storage_backend="s3", s3_bucket="lab-bucket", s3_prefix="")
+    client = TestClient(create_app(container=container))
 
     response = client.post("/uploads", files={"files": ("scan.png", png_bytes(), "image/png")})
     assert response.status_code == 200, response.text
     (form_id,) = response.json()[0]["form_ids"]
     keys = {key for _bucket, key in fake.objects}
     assert any(key.startswith("uploads/") for key in keys) and any(key.startswith("pages_img/") for key in keys)
-    assert not (config.DATA_DIR / "pages_img").exists()
+    assert not (container.settings.data_dir / "pages_img").exists()
 
     image = client.get(f"/forms/{form_id}/image")
     assert image.status_code == 200 and image.headers["content-type"] == "image/png"

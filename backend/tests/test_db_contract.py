@@ -4,32 +4,31 @@ import pytest
 from alembic import command
 from sqlalchemy import create_engine, inspect, text
 
+from db.repositories import FormFilters
 from tests.conftest import alembic_config, make_form
 
 
-def _tables(app_env) -> set[str]:
-    import db.session
+def _tables(settings) -> set[str]:
 
-    engine = create_engine(db.session.DATABASE_URL, future=True)
+    engine = create_engine(settings.database_url, future=True)
     try:
         return set(inspect(engine).get_table_names())  # works on SQLite and PostgreSQL
     finally:
         engine.dispose()
 
 
-def test_migration_upgrade_and_downgrade(app_env):
-    assert {"forms", "extracted_fields", "senders"} <= _tables(app_env)
+def test_migration_upgrade_and_downgrade(settings):
+    assert {"forms", "extracted_fields", "senders"} <= _tables(settings)
     command.downgrade(alembic_config(), "base")
-    assert _tables(app_env) <= {"alembic_version"}
+    assert _tables(settings) <= {"alembic_version"}
 
 
-def test_upgrade_preserves_existing_fields(app_env):
+def test_upgrade_preserves_existing_fields(settings):
     """Batch table rebuilds must not cascade-delete child rows."""
-    import db.session
 
     cfg = alembic_config()
     command.downgrade(cfg, "ea99c03b9c61")
-    engine = create_engine(db.session.DATABASE_URL, future=True)
+    engine = create_engine(settings.database_url, future=True)
     with engine.begin() as conn:
         conn.exec_driver_sql("INSERT INTO forms (id, source_file, file_hash, page_number, image_path, status) VALUES (1, 'a', 'h', 1, 'p', 'extracted')")
         conn.exec_driver_sql("INSERT INTO extracted_fields (form_id, field_name, raw_value, status) VALUES (1, 'first_name', 'אבי', 'uncertain')")
@@ -39,8 +38,7 @@ def test_upgrade_preserves_existing_fields(app_env):
         assert conn.exec_driver_sql("SELECT llm_value FROM extracted_fields").fetchall() == [("אבי",)]
 
 
-def test_queue_claim_and_status_updates(app_env):
-    from db import queries
+def test_queue_claim_and_status_updates(queries):
 
     form_id = make_form(queries)
     assert queries.get_form(form_id)["status"] == "uploaded"
@@ -60,8 +58,7 @@ def test_queue_claim_and_status_updates(app_env):
     assert queries.get_form(form_id)["status"] == "uploaded"
 
 
-def test_multi_value_confirm_and_approval(app_env):
-    from db import queries
+def test_multi_value_confirm_and_approval(queries):
 
     form_id = make_form(queries)
     queries.save_extraction(
@@ -88,8 +85,7 @@ def test_multi_value_confirm_and_approval(app_env):
         queries.confirm_field(form_id, 999999, corrected_value=None)
 
 
-def test_re_extraction_keeps_human_corrections(app_env):
-    from db import queries
+def test_re_extraction_keeps_human_corrections(queries):
 
     form_id = make_form(queries)
     queries.save_extraction(form_id, [{"field_name": "id_number", "value": "1", "status": "uncertain"}])
@@ -101,33 +97,31 @@ def test_re_extraction_keeps_human_corrections(app_env):
     assert [f["value"] for f in fields] == ["000000018"]
 
 
-def test_list_forms_paging_filtering_sorting(app_env):
-    from db import queries
+def test_list_forms_paging_filtering_sorting(queries):
 
     ids = [make_form(queries, file_hash=f"h{i}") for i in range(5)]
     queries.save_extraction(ids[0], [{"field_name": "first_name", "value": "דנה", "status": "verified"}])
 
-    page, total = queries.list_forms(queries.FormFilters(), limit=2)
+    page, total = queries.list_forms(FormFilters(), limit=2)
     assert total == 5 and [f["id"] for f in page] == ids[::-1][:2]  # newest first
 
-    page, total = queries.list_forms(queries.FormFilters(query="דנה"), limit=10)
+    page, total = queries.list_forms(FormFilters(query="דנה"), limit=10)
     assert total == 1 and page[0]["id"] == ids[0]
 
-    page, total = queries.list_forms(queries.FormFilters(column_filters={"first_name": "דנ"}), limit=10)
+    page, total = queries.list_forms(FormFilters(column_filters={"first_name": "דנ"}), limit=10)
     assert [f["id"] for f in page] == [ids[0]]
 
-    page, _ = queries.list_forms(queries.FormFilters(sort_by="id", sort_dir="asc"), limit=1, offset=1)
+    page, _ = queries.list_forms(FormFilters(sort_by="id", sort_dir="asc"), limit=1, offset=1)
     assert page[0]["id"] == ids[1]
 
-    page, _ = queries.list_forms(queries.FormFilters(sort_by="first_name", sort_dir="desc"), limit=1)
+    page, _ = queries.list_forms(FormFilters(sort_by="first_name", sort_dir="desc"), limit=1)
     assert page[0]["id"] == ids[0]
 
     with pytest.raises(ValueError):
-        queries.list_forms(queries.FormFilters(sort_by="nope"), limit=1)
+        queries.list_forms(FormFilters(sort_by="nope"), limit=1)
 
 
-def test_summary_and_senders(app_env):
-    from db import queries
+def test_summary_and_senders(queries):
 
     form_id = make_form(queries)
     queries.save_extraction(form_id, [{"field_name": "sender", "value": "x", "status": "uncertain"}])
@@ -143,15 +137,14 @@ def test_summary_and_senders(app_env):
     assert ("בריאות", "health_fund") in queries.list_senders()
 
 
-def test_upgrade_splits_combined_llm_and_barcode_results(app_env):
+def test_upgrade_splits_combined_llm_and_barcode_results(settings):
     """Revision c3d4e5f6a7b8: {"llm", "barcodes"} in raw_llm_json → llm_result + barcode_result; ocr_value → barcode_value."""
     import json
 
-    import db.session
 
     cfg = alembic_config()
     command.downgrade(cfg, "b7c1d2e3f4a5")
-    engine = create_engine(db.session.DATABASE_URL, future=True)
+    engine = create_engine(settings.database_url, future=True)
     combined = {"llm": {"commitment_number": [{"value": "2646"}]}, "barcodes": [{"data": "2646", "type": "CODE39"}]}
     with engine.begin() as conn:
         conn.execute(
@@ -171,8 +164,7 @@ def test_upgrade_splits_combined_llm_and_barcode_results(app_env):
     assert tuple(field) == ("2646", None)
 
 
-def test_re_extraction_keeps_fields_confirmed_without_correction(app_env):
-    from db import queries
+def test_re_extraction_keeps_fields_confirmed_without_correction(queries):
 
     form_id = make_form(queries)
     queries.save_extraction(form_id, [{"field_name": "first_name", "value": "דנה", "status": "unverified"}])

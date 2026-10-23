@@ -49,7 +49,7 @@ def _load_pages(path: Path, dpi: int) -> list[Image.Image]:
 
 
 def main() -> None:
-    import config
+    from config import load_settings
 
     if len(sys.argv) != 2:
         print("Usage: python -m integrations.imaging.barcode path/to/file.pdf")
@@ -62,7 +62,7 @@ def main() -> None:
 
     result = [
         {"page": page_number, **barcode}
-        for page_number, image in enumerate(_load_pages(path, config.PAGE_RENDER_DPI), start=1)
+        for page_number, image in enumerate(_load_pages(path, load_settings().page_render_dpi), start=1)
         for barcode in scan_pil_image(image)
     ]
     print(json.dumps(result, ensure_ascii=False, indent=2))

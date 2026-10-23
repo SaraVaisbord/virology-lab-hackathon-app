@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from domain.vocabulary import SENDER_KINDS
 from .models import Sender
-from .session import SessionLocal
+from .session import Database
 
 SEED_SENDERS = [
     ("כללית", "health_fund"),
@@ -63,11 +63,11 @@ SEED_SENDERS = [
 ]
 
 
-def seed_senders() -> tuple[int, int]:
+def seed_senders(database: Database) -> tuple[int, int]:
     added = 0
     existing = 0
 
-    with SessionLocal() as session:
+    with database.sessions() as session:
         with session.begin():
             for name, kind in SEED_SENDERS:
                 if kind not in SENDER_KINDS:
@@ -85,4 +85,10 @@ def seed_senders() -> tuple[int, int]:
 
 
 if __name__ == "__main__":
-    seed_senders()
+    from config import load_settings
+
+    database = Database(load_settings().database_url)
+    try:
+        seed_senders(database)
+    finally:
+        database.dispose()

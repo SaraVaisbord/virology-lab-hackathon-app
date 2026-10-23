@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Any, Iterator
 
-import config
-from db import queries
+from db.repositories import CorrectionHistory, SenderRepository
 from domain.verification import match_sender
 from domain.vocabulary import (
     FIELD_LABELS,
@@ -22,6 +22,16 @@ from domain.vocabulary import (
     SOURCE_LABELS,
     WRONG_VALUE_CHANGE_KINDS,
 )
+
+@dataclass(frozen=True)
+class InsightThresholds:
+    min_reviewed_fields: int  # below this many reviewed machine values there is not enough history for any pattern
+    min_events: int  # a pattern is reported from this many events
+    medium_support_events: int  # from this many events its support is medium,
+    high_support_events: int  # and from this many high
+    min_correction_percent: int  # a field is "often corrected" from this share (%) of its reviewed values
+    concentration_percent: int  # a pattern is "concentrated" where at least this share (%) of it is
+
 
 _SUPPORT_ORDER = {"high": 0, "medium": 1, "low": 2}
 # Insight detail columns: the one that refines a pattern (e.g. which digit swap), set per pattern below.
@@ -64,19 +74,19 @@ def _pattern_keys(event: dict[str, Any]) -> Iterator[tuple[str, str, str | None,
         yield "extra_value", field, None, None
 
 
-def _support(event_count: int) -> str:
-    if event_count >= config.INSIGHTS_HIGH_SUPPORT_EVENTS:
+def _support(event_count: int, thresholds: InsightThresholds) -> str:
+    if event_count >= thresholds.high_support_events:
         return "high"
-    return "medium" if event_count >= config.INSIGHTS_MEDIUM_SUPPORT_EVENTS else "low"
+    return "medium" if event_count >= thresholds.medium_support_events else "low"
 
 
-def _concentrated_in(events: list[dict[str, Any]], key: str) -> str | None:
-    """The value of `key` that most of these events share (INSIGHTS_CONCENTRATION_PERCENT), if any."""
+def _concentrated_in(events: list[dict[str, Any]], key: str, thresholds: InsightThresholds) -> str | None:
+    """The value of `key` that most of these events share (thresholds.concentration_percent), if any."""
     counts = Counter(event[key] for event in events if event[key])
     if not counts:
         return None
     value, count = counts.most_common(1)[0]
-    return value if count * 100 >= config.INSIGHTS_CONCENTRATION_PERCENT * len(events) else None
+    return value if count * 100 >= thresholds.concentration_percent * len(events) else None
 
 
 def _recommendation(pattern: str, field: str, detail: str | None, value: str | None, share: float) -> str:
@@ -91,7 +101,7 @@ def _recommendation(pattern: str, field: str, detail: str | None, value: str | N
     )
 
 
-def build_insights(events: list[dict[str, Any]]) -> dict[str, Any]:
+def build_insights(events: list[dict[str, Any]], thresholds: InsightThresholds) -> dict[str, Any]:
     """Patterns in these events (each with its form's `form_type` and known `sender`). Only first decisions on the
     machine's output count (before_origin "machine"): changing her own earlier value says nothing about extraction."""
     reviewed = [event for event in events if event["before_origin"] == "machine"]
@@ -100,16 +110,16 @@ def build_insights(events: list[dict[str, Any]]) -> dict[str, Any]:
     coverage = {
         "reviewed_fields": len(reviewed),
         "corrected_fields": sum(corrected_per_field.values()),
-        "required_reviewed_fields": config.INSIGHTS_MIN_REVIEWED_FIELDS,
+        "required_reviewed_fields": thresholds.min_reviewed_fields,
         # Counts, not insights: which fields were corrected most (most first).
         "by_field": [
             {"field_name": name, "reviewed": count, "corrected": corrected_per_field[name]}
             for name, count in sorted(reviewed_per_field.items(), key=lambda item: (-corrected_per_field[item[0]], -item[1], item[0]))
         ],
     }
-    if len(reviewed) < config.INSIGHTS_MIN_REVIEWED_FIELDS:
+    if len(reviewed) < thresholds.min_reviewed_fields:
         message = INSIGHT_STATUS_MESSAGES["insufficient_data"].format(
-            reviewed=len(reviewed), required=config.INSIGHTS_MIN_REVIEWED_FIELDS
+            reviewed=len(reviewed), required=thresholds.min_reviewed_fields
         )
         return {"status": "insufficient_data", "message": message, "coverage": coverage, "insights": []}
 
@@ -121,9 +131,9 @@ def build_insights(events: list[dict[str, Any]]) -> dict[str, Any]:
     insights = []
     for (pattern, field, detail, value), group in groups.items():
         share = len(group) / reviewed_per_field[field]
-        if len(group) < config.INSIGHTS_MIN_EVENTS:
+        if len(group) < thresholds.min_events:
             continue
-        if pattern == "frequent_correction" and share * 100 < config.INSIGHTS_MIN_CORRECTION_PERCENT:
+        if pattern == "frequent_correction" and share * 100 < thresholds.min_correction_percent:
             continue
         times = [event["created_at"] for event in group]
         insights.append({
@@ -135,25 +145,31 @@ def build_insights(events: list[dict[str, Any]]) -> dict[str, Any]:
             "share": round(share, 3),
             "first_seen": min(times),
             "last_seen": max(times),
-            "concentrated_in": {name: _concentrated_in(group, key) for name, key in _CONCENTRATION_KEYS.items()},
-            "support": _support(len(group)),
+            "concentrated_in": {name: _concentrated_in(group, key, thresholds) for name, key in _CONCENTRATION_KEYS.items()},
+            "support": _support(len(group), thresholds),
             "recommendation": _recommendation(pattern, field, detail, value, share),
         })
     insights.sort(key=lambda item: (_SUPPORT_ORDER[item["support"]], -item["event_count"], item["pattern_type"], item["field_name"]))
     return {"status": "ok", "message": INSIGHT_STATUS_MESSAGES["ok"], "coverage": coverage, "insights": insights}
 
 
-def correction_insights(since: datetime | None = None, until: datetime | None = None,
-                        field_name: str | None = None) -> dict[str, Any]:
-    """Insights for the history in [since, until] (event times), optionally for one field."""
-    since, until = _naive_utc(since), _naive_utc(until)
-    if since is not None and until is not None and since > until:
-        raise ValueError("'since' must not be later than 'until'.")
-    events = queries.correction_events(since, until, field_name)
-    known_senders = [name for name, _kind in queries.list_senders()]
-    for event in events:
-        # Only the name of a known institution goes on — never the free text read from the form.
-        event["sender"] = match_sender(event.pop("sender_text") or "", known_senders)
-    result = build_insights(events)
-    result["coverage"]["auto_accepted_fields"] = queries.count_unreviewed_verified_fields(since, until, field_name)
-    return {"since": since, "until": until, "field_name": field_name, **result}
+class InsightsService:
+    def __init__(self, history: CorrectionHistory, senders: SenderRepository, thresholds: InsightThresholds) -> None:
+        self._history = history
+        self._senders = senders
+        self._thresholds = thresholds
+
+    def correction_insights(self, since: datetime | None = None, until: datetime | None = None,
+                            field_name: str | None = None) -> dict[str, Any]:
+        """Insights for the history in [since, until] (event times), optionally for one field."""
+        since, until = _naive_utc(since), _naive_utc(until)
+        if since is not None and until is not None and since > until:
+            raise ValueError("'since' must not be later than 'until'.")
+        events = self._history.correction_events(since, until, field_name)
+        known_senders = self._senders.names()
+        for event in events:
+            # Only the name of a known institution goes on — never the free text read from the form.
+            event["sender"] = match_sender(event.pop("sender_text") or "", known_senders)
+        result = build_insights(events, self._thresholds)
+        result["coverage"]["auto_accepted_fields"] = self._history.count_unreviewed_verified_fields(since, until, field_name)
+        return {"since": since, "until": until, "field_name": field_name, **result}

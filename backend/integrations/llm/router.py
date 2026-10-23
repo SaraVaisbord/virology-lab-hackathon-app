@@ -33,6 +33,10 @@ class LlmRouter:
     def known(self) -> list[str]:
         return sorted(self._providers)
 
+    def provider(self, name: str) -> LlmProvider:
+        """One provider by name, without failover (e.g. to compare providers on one page)."""
+        return self._providers[name]
+
     def provider_names(self, providers: list[str] | None = None) -> list[str]:
         names = list(providers or self._order)
         unknown = [name for name in names if name not in self._providers]

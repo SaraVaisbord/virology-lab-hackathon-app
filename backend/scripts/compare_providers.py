@@ -12,9 +12,8 @@ from __future__ import annotations
 import argparse
 import sys
 
-import config
-from container import build_file_storage, build_llm_providers, verification_rules
-from db import queries
+from config import load_settings
+from container import build_container
 from domain.verification import build_fields
 from domain.vocabulary import FIELD_LABELS, FIELD_STATUS_LABELS
 
@@ -44,7 +43,8 @@ def main() -> None:
     parser.add_argument("--openai-model")
     args = parser.parse_args()
 
-    form = queries.get_form(args.form_id, with_sources=True)
+    container = build_container(load_settings())
+    form = container.forms.get_form(args.form_id, with_sources=True)
     if form is None:
         sys.exit(f"Form {args.form_id} not found")
     sources = form["sources"]
@@ -52,14 +52,14 @@ def main() -> None:
     if not gemini_result:
         sys.exit(f"Form {args.form_id} has no Gemini result yet (status: {form['status']})")
     barcodes = (sources.get("barcode_result") or {}).get("items", [])
-    senders = [name for name, _ in queries.list_senders()]
+    senders = container.senders.names()
 
     print(f"Form {form['id']} · {form['source_file']} · page {form['page_number']} · barcodes on page: {len(barcodes)}")
     print("Asking OpenAI…", flush=True)
-    with build_file_storage(config).local_path(form["image_path"]) as image_path:
-        openai_result = build_llm_providers(config)["openai"].extract_from_image(image_path, senders, model=args.openai_model)
+    with container.storage.local_path(form["image_path"]) as image_path:
+        openai_result = container.llm.provider("openai").extract_from_image(image_path, senders, model=args.openai_model)
 
-    rules = verification_rules(config)
+    rules = container.pipeline.rules
     gemini_fields = build_fields(gemini_result, barcodes, senders, rules, page=form["page_number"])
     openai_fields = build_fields(openai_result, barcodes, senders, rules, page=form["page_number"])
     usage = openai_result.get("_usage", {})

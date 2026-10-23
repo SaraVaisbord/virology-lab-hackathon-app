@@ -23,9 +23,11 @@ from pathlib import Path
 
 from PIL import Image
 
-import barcode_reader
-import local_extractor
-from preprocessing import preprocess
+from config import load_settings
+from container import build_ocr
+from integrations.imaging.barcode import scan_pil_image
+from integrations.imaging.preprocessing import preprocess
+from integrations.ocr.local_extractor import LocalExtractor, normalize_date
 from scripts.preprocessing_eval import load_native_page
 
 EVAL_FIELDS = ("central_number", "commitment_number", "id_number", "received_date")
@@ -33,7 +35,7 @@ EVAL_FIELDS = ("central_number", "commitment_number", "id_number", "received_dat
 
 def _norm(field: str, value: str) -> str:
     if field == "received_date":
-        return local_extractor.normalize_date(value) or value
+        return normalize_date(value) or value
     return re.sub(r"\D", "", value)
 
 
@@ -52,7 +54,7 @@ def load_reference(db_path: Path) -> dict[str, set[tuple[str, str]]]:
 def scan_barcodes(views) -> list[dict]:
     found = {}
     for view in views.barcode_views:
-        for barcode in barcode_reader.scan_pil_image(Image.fromarray(view).convert("RGB")):
+        for barcode in scan_pil_image(Image.fromarray(view).convert("RGB")):
             found.setdefault(barcode["data"], barcode)
     return list(found.values())
 
@@ -64,15 +66,17 @@ def main() -> None:
     parser.add_argument("--show-values", action="store_true")
     args = parser.parse_args()
     reference = load_reference(args.reference_db)
+    settings = load_settings()
+    local = LocalExtractor(build_ocr(settings), settings.received_date_max_age_days)
 
     local_tally, ref_tally, per_field = Counter(), Counter(), Counter()
     total_seconds = 0.0
     for pdf in sorted(args.folder.glob("*.pdf")):
         started = time.time()
         image, dpi = load_native_page(pdf)
-        views = preprocess(image, source_dpi=dpi)
+        views = preprocess(image, source_dpi=dpi, ocr=local.ocr)
         barcodes = scan_barcodes(views)
-        result = local_extractor.extract(views, barcodes)
+        result = local.extract(views, barcodes)
         seconds = time.time() - started
         total_seconds += seconds
 

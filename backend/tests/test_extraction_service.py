@@ -10,7 +10,7 @@ from domain.vocabulary import EXTRACTION_ERRORS, FIELDS, REASONS
 from domain.verification import VerificationRules, match_sender
 from integrations.llm.errors import ExtractionError, MissingApiKeyError, ModelsUnavailableError
 from domain.verification import build_fields as _build_fields
-from tests.conftest import DummyUpload, make_form, png_bytes
+from tests.conftest import make_form, png_bytes
 
 VALID_ID = "000000018"
 SENDERS = ["המרכז הרפואי שמיר", "כללית"]
@@ -243,12 +243,9 @@ def fake_local_sources():
 
 
 @pytest.fixture
-def make_pipeline(app_env, fake_local_sources):
+def make_pipeline(container, fake_local_sources):
     """make_pipeline(gemini=..., openai=..., llm_enabled=False) → an ExtractionPipeline over the test DB and data
     folder, with the given LLM providers (the others unconfigured) and the canned local sources."""
-    import config
-    from db import session
-    from db.repositories import FormRepository, SenderRepository
     from integrations.llm.router import LlmRouter
     from integrations.storage import LocalStorage
     from services.extraction_pipeline import ExtractionPipeline
@@ -273,27 +270,25 @@ def make_pipeline(app_env, fake_local_sources):
     def make(llm_enabled=False, **providers):
         known = {name: providers.get(name) or _unconfigured() for name in ("gemini", "claude", "openai")}
         router = LlmRouter(known, ["gemini", "claude"])
-        sessions = session.SessionLocal
-        return ExtractionPipeline(FormRepository(sessions), SenderRepository(sessions), LocalStorage(config.DATA_DIR), router, Local(), scan, RULES,
-                                  page_render_dpi=config.PAGE_RENDER_DPI, llm_enabled=llm_enabled)
+        settings = container.settings
+        return ExtractionPipeline(container.forms, container.senders, LocalStorage(settings.data_dir), router, Local(), scan, RULES,
+                                  page_render_dpi=settings.page_render_dpi, llm_enabled=llm_enabled)
     return make
 
 
-def _uploaded_form(queries, upload_service):
-    form_id = upload_service.process_upload(DummyUpload("a.png", png_bytes()))["form_ids"][0]
+def _uploaded_form(queries, container):
+    form_id = container.uploads.process_upload("a.png", png_bytes())["form_ids"][0]
     return form_id, queries.claim_next_form()
 
 
-def test_pipeline_calls_every_source_and_stores_results_separately(make_pipeline, fake_local_sources):
+def test_pipeline_calls_every_source_and_stores_results_separately(make_pipeline, fake_local_sources, queries, container):
     """Spec 1, 2, 7, 8."""
-    from db import queries
-    from services import upload_service
 
     fake_local_sources["local"] = [_local("commitment_number", "2646")]
     llm = {"commitment_number": [{"value": "2646", "confidence": "high", "label": "מספר התחייבות"}], "notes": "x"}
     pipeline = make_pipeline(gemini=_FakeProvider(llm, calls=fake_local_sources["calls"]))
 
-    form_id, form = _uploaded_form(queries, upload_service)
+    form_id, form = _uploaded_form(queries, container)
     pipeline.extract(form, use_llm=True)
     assert fake_local_sources["calls"][-2:] == ["ocr", "llm"] and "barcode" in fake_local_sources["calls"]
 
@@ -310,13 +305,11 @@ def test_pipeline_calls_every_source_and_stores_results_separately(make_pipeline
     assert commitment["llm_value"] == commitment["barcode_value"] == commitment["ocr_value"] == "2646"
 
 
-def test_local_only_mode_never_calls_the_llm(make_pipeline, fake_local_sources):
-    from db import queries
-    from services import upload_service
+def test_local_only_mode_never_calls_the_llm(make_pipeline, fake_local_sources, queries, container):
 
     fake_local_sources["local"] = [_local("central_number", "12043017", label="מרכזי:")]
     pipeline = make_pipeline(gemini=_FakeProvider(error=AssertionError("LLM must not be called")))
-    form_id, form = _uploaded_form(queries, upload_service)
+    form_id, form = _uploaded_form(queries, container)
     pipeline.extract(form, use_llm=False)
 
     stored = queries.get_form(form_id, with_sources=True)
@@ -324,17 +317,13 @@ def test_local_only_mode_never_calls_the_llm(make_pipeline, fake_local_sources):
     assert _by_name(stored["fields"], "central_number")[0]["ocr_value"] == "12043017"
 
 
-def test_llm_failure_keeps_barcode_and_ocr_results(make_pipeline, fake_local_sources):
+def test_llm_failure_keeps_barcode_and_ocr_results(make_pipeline, fake_local_sources, queries, container):
     """Spec 6."""
-    from db import queries
-    from services import upload_service
-    from db import session
-    from db.repositories import FormRepository
     from services.extraction_queue import ExtractionQueue
 
     pipeline = make_pipeline(gemini=_FakeProvider(error=ExtractionError("Gemini API error: boom")), llm_enabled=True)
-    form_id, form = _uploaded_form(queries, upload_service)
-    ExtractionQueue(pipeline, FormRepository(session.SessionLocal), 1, 1).process(form)
+    form_id, form = _uploaded_form(queries, container)
+    ExtractionQueue(pipeline, container.forms, 1, 1).process(form)
 
     stored = queries.get_form(form_id, with_sources=True)
     assert stored["status"] == "failed" and stored["error"] == EXTRACTION_ERRORS["model"]
@@ -343,14 +332,12 @@ def test_llm_failure_keeps_barcode_and_ocr_results(make_pipeline, fake_local_sou
     assert stored["sources"]["source_errors"] == {"llm": EXTRACTION_ERRORS["model"]}
 
 
-def test_barcode_failure_keeps_other_results(make_pipeline, fake_local_sources):
+def test_barcode_failure_keeps_other_results(make_pipeline, fake_local_sources, queries, container):
     """Spec 6 (the other direction)."""
-    from db import queries
-    from services import upload_service
 
     fake_local_sources["barcodes"] = None  # the fake zbar raises (None is not iterable)
     pipeline = make_pipeline(gemini=_FakeProvider({"central_number": [{"value": "12345", "confidence": "high"}]}))
-    form_id, form = _uploaded_form(queries, upload_service)
+    form_id, form = _uploaded_form(queries, container)
     pipeline.extract(form, use_llm=True)
 
     stored = queries.get_form(form_id, with_sources=True)
@@ -360,17 +347,13 @@ def test_barcode_failure_keeps_other_results(make_pipeline, fake_local_sources):
     assert _by_name(stored["fields"], "central_number")[0]["llm_value"] == "12345"
 
 
-def test_quota_error_requeues_form_and_pauses_queue(make_pipeline, fake_local_sources):
-    from db import queries
-    from services import upload_service
-    from db import session
-    from db.repositories import FormRepository
+def test_quota_error_requeues_form_and_pauses_queue(make_pipeline, fake_local_sources, queries, container):
     from services.extraction_queue import ExtractionQueue
 
     quota = ModelsUnavailableError("429", retry_after_seconds=120, reason="quota")
     pipeline = make_pipeline(gemini=_FakeProvider(error=quota), llm_enabled=True)
-    form_id, form = _uploaded_form(queries, upload_service)
-    queue = ExtractionQueue(pipeline, FormRepository(session.SessionLocal), 1, 1)
+    form_id, form = _uploaded_form(queries, container)
+    queue = ExtractionQueue(pipeline, container.forms, 1, 1)
     queue.process(form)
 
     assert queries.get_form(form_id)["status"] == "uploaded"
@@ -378,8 +361,7 @@ def test_quota_error_requeues_form_and_pauses_queue(make_pipeline, fake_local_so
     assert queue._pause_reason == "quota" and queue._seconds_until_resume() > 0
 
 
-def test_reverify_uses_stored_sources_without_calling_the_llm(make_pipeline):
-    from db import queries
+def test_reverify_uses_stored_sources_without_calling_the_llm(make_pipeline, queries):
 
     form_id = make_form(queries)
     queries.save_source_results(
@@ -401,13 +383,11 @@ def test_retry_delay_is_parsed_from_gemini_message():
     assert retry_after_seconds("Please retry in 13.2s", 60) == 13.2
 
 
-def test_one_off_extraction_with_openai_provider(make_pipeline, fake_local_sources):
-    from db import queries
-    from services import upload_service
+def test_one_off_extraction_with_openai_provider(make_pipeline, fake_local_sources, queries, container):
 
     fake_local_sources["barcodes"] = []
     pipeline = make_pipeline(openai=_FakeProvider({"central_number": [{"value": "12345", "confidence": "high"}], "_model": "gpt-test"}))
-    form_id = upload_service.process_upload(DummyUpload("a.png", png_bytes()))["form_ids"][0]
+    form_id = container.uploads.process_upload("a.png", png_bytes())["form_ids"][0]
 
     assert pipeline.extract_one(form_id, "openai", use_llm=True) == "extracted"
     stored = queries.get_form(form_id, with_sources=True)

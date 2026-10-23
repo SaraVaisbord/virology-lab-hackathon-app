@@ -11,7 +11,7 @@ import anthropic
 import httpx2
 import pytest
 
-import config
+from config import load_settings
 from integrations.llm.claude import ClaudeProvider, ClaudeSettings, json_schema
 from integrations.llm.errors import ExtractionError, MissingApiKeyError, ModelsUnavailableError
 from integrations.llm.page_image import PageImageSettings
@@ -268,14 +268,9 @@ def test_claude_unusable_answers(claude, response):
 # ── Several Claude keys ──────────────────────────────────────────────────────
 
 
-def test_claude_keys_are_read_like_gemini_keys(monkeypatch):
-    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_2", "ANTHROPIC_API_KEY_10", "ANTHROPIC_API_KEYS"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "a")
-    monkeypatch.setenv("ANTHROPIC_API_KEY_10", "c")
-    monkeypatch.setenv("ANTHROPIC_API_KEY_2", "b")
-    monkeypatch.setenv("ANTHROPIC_API_KEYS", "d, a")
-    assert config._api_keys("ANTHROPIC_API_KEY") == ["a", "b", "c", "d"]
+def test_claude_keys_are_read_like_gemini_keys():
+    environ = {"ANTHROPIC_API_KEY": "a", "ANTHROPIC_API_KEY_10": "c", "ANTHROPIC_API_KEY_2": "b", "ANTHROPIC_API_KEYS": "d, a"}
+    assert load_settings(environ).anthropic_api_keys == ["a", "b", "c", "d"]
 
 
 @pytest.mark.parametrize("first_key_error", [

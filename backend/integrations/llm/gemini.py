@@ -148,7 +148,7 @@ class GeminiRouter:
 
 
 def _disable_ssl_verification_once() -> None:
-    # MVP workaround for a CA-certificate issue on Python 3.14 / Windows (see config.GEMINI_INSECURE_SSL).
+    # MVP workaround for a CA-certificate issue on Python 3.14 / Windows (settings.llm_insecure_ssl).
     if getattr(ssl, "_gemini_patched", False):
         return
     original = ssl.create_default_context

@@ -1,5 +1,5 @@
-"""
-handwriting_digits.py - Read handwritten digit strings locally (no LLM) from the pen layer of a page.
+"""Read handwritten digit strings locally (no LLM) from the pen layer of a page. EXPERIMENTAL — not wired into the
+pipeline: measured on 16 ID windows, only 4 were read and 3 of those wrong (but checksum-valid).
 
 Tesseract is built for print, so handwritten IDs / dates were invisible to the local engine. Digits, unlike Hebrew
 handwriting, are a solved problem: a small CNN trained on handwritten digits (MNIST, ONNX, ~26 KB) run with OpenCV.
@@ -18,11 +18,11 @@ from __future__ import annotations
 import heapq
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 import cv2
 import numpy as np
 
-import config
 from domain.validators import israeli_id_is_valid
 
 
@@ -69,13 +69,14 @@ class DigitGuess:
 
 
 @lru_cache(maxsize=1)
-def _net():
+def _net(model: Path):
     # Loaded from memory: OpenCV can't open files under non-ASCII paths on Windows (the project folder is Hebrew).
-    return cv2.dnn.readNetFromONNX(np.fromfile(str(config.HANDWRITTEN_DIGITS_MODEL), dtype=np.uint8))
+    return cv2.dnn.readNetFromONNX(np.fromfile(str(model), dtype=np.uint8))
 
 
-def is_available() -> bool:
-    return config.HANDWRITTEN_DIGITS_MODEL.is_file()
+def is_available(model: Path) -> bool:
+    """model: the MNIST ONNX file (settings.handwritten_digits_model)."""
+    return model.is_file()
 
 
 def _to_mnist(mask: np.ndarray) -> np.ndarray:
@@ -100,9 +101,9 @@ def _to_mnist(mask: np.ndarray) -> np.ndarray:
     return canvas.astype(np.float32)
 
 
-def classify(digit_masks: list[np.ndarray]) -> list[np.ndarray]:
+def classify(digit_masks: list[np.ndarray], model: Path) -> list[np.ndarray]:
     """Softmax probabilities per digit image."""
-    net = _net()
+    net = _net(model)
     probabilities = []
     for mask in digit_masks:  # one at a time: the model has a fixed batch size of 1 (internal reshape)
         # Inputs must be 0..1 — with 0..255 the logits reach thousands and every softmax is a fake 100%.
@@ -238,9 +239,9 @@ def _rotate_mask(mask: np.ndarray, degrees: float) -> np.ndarray:
     return cv2.warpAffine(padded, matrix, (pw, ph), flags=cv2.INTER_NEAREST)
 
 
-def read_digits(window_mask: np.ndarray, settings: HandwritingSettings = DEFAULT_SETTINGS) -> list[DigitGuess]:
+def read_digits(window_mask: np.ndarray, model: Path, settings: HandwritingSettings = DEFAULT_SETTINGS) -> list[DigitGuess]:
     """Digits of the main handwritten number in a pen-layer window (255 = ink), left to right."""
-    if not is_available() or window_mask is None or window_mask.size == 0:
+    if not is_available(model) or window_mask is None or window_mask.size == 0:
         return []
     slant = _window_slant(window_mask, settings)
     if abs(slant) >= 2:
@@ -259,11 +260,11 @@ def read_digits(window_mask: np.ndarray, settings: HandwritingSettings = DEFAULT
         if w * h < settings.min_area_share * median_area or h < 0.4 * median_h:
             continue  # dots, dashes (date separators are re-inserted by the caller from the gaps)
         blob = np.where(labels[y:y + h, x:x + w] == label, 255, 0).astype(np.uint8)
-        guesses.extend(_best_segmentation(blob, (x, y, h), settings))
+        guesses.extend(_best_segmentation(blob, (x, y, h), model, settings))
     return guesses
 
 
-def _best_segmentation(blob: np.ndarray, origin: tuple[int, int, int], settings: HandwritingSettings) -> list[DigitGuess]:
+def _best_segmentation(blob: np.ndarray, origin: tuple[int, int, int], model: Path, settings: HandwritingSettings) -> list[DigitGuess]:
     """Read a blob as 1..max_pieces touching digits and keep the most convincing reading. The width-based
     estimate is the default; other piece counts must beat it by split_gain_nats (mean log-probability)."""
     x, y, h = origin
@@ -274,7 +275,7 @@ def _best_segmentation(blob: np.ndarray, origin: tuple[int, int, int], settings:
         parts = _split(blob, count) if count > 1 else [blob]
         if len(parts) != count or any(part.shape[1] < h * 0.15 for part in parts):
             continue  # a piece thinner than a stroke isn't a digit
-        probabilities = classify(parts)
+        probabilities = classify(parts, model)
         score = float(np.mean([np.log(max(p.max(), 1e-9)) for p in probabilities]))
         margin = 0 if count == estimate else settings.split_gain_nats
         if best_score is None or score > best_score + margin:

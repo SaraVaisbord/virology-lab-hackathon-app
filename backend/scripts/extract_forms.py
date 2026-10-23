@@ -11,13 +11,14 @@ import argparse
 import logging
 import sys
 
-import config
+from config import load_settings
 from container import build_container
-from db.queries import FormFilters, list_forms
+from db.repositories import FormFilters
 
 
 def main() -> None:
-    pipeline = build_container(config).pipeline
+    container = build_container(load_settings())
+    pipeline, settings = container.pipeline, container.settings
     parser = argparse.ArgumentParser()
     parser.add_argument("--form", type=int)
     parser.add_argument("--provider", choices=pipeline.llm_providers, default=None,
@@ -28,10 +29,10 @@ def main() -> None:
 
     if cli.form is not None:
         status = pipeline.extract_one(cli.form, cli.provider, use_llm=False if cli.local_only else None)
-        source = "local only" if cli.local_only else cli.provider or ", ".join(config.LLM_PROVIDERS)
+        source = "local only" if cli.local_only else cli.provider or ", ".join(settings.llm_providers)
         print(f"Form {cli.form} ({source}): {status}", file=sys.stderr)
     else:
-        rows, _ = list_forms(FormFilters(), limit=config.EXPORT_MAX_ROWS)
+        rows, _ = container.listing.list_forms(FormFilters(), limit=settings.export_max_rows)
         done = sum(pipeline.reverify(row["id"]) for row in rows)
         print(f"Re-verified {done} of {len(rows)} forms.", file=sys.stderr)
 

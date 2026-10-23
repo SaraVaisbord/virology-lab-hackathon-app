@@ -3,7 +3,6 @@ answers and errors)."""
 
 from __future__ import annotations
 
-import importlib
 import json
 import logging
 import time
@@ -163,23 +162,20 @@ def test_keys_and_model_output_never_reach_logs_or_errors(monkeypatch, page, cap
     assert "ישראל" not in everything
 
 
-def test_key_list_config(monkeypatch):
-    import config
+def test_key_list_config():
+    from config import load_settings
 
-    monkeypatch.setenv("GEMINI_API_KEY", "a")
-    monkeypatch.setenv("GEMINI_API_KEY_10", "n10")  # numeric (not alphabetical) order: _2 before _10
-    monkeypatch.setenv("GEMINI_API_KEY_2", "n2")
-    monkeypatch.setenv("GEMINI_API_KEYS", "b, a ,your-key-here,,c")
-    monkeypatch.setenv("GEMINI_FALLBACK_MODELS", "m2, m3")
-    monkeypatch.setenv("GEMINI_MODEL", "m1")
-    try:
-        importlib.reload(config)
-        # single key first, then numbered keys, then the list; deduplicated, placeholder dropped
-        assert config.GEMINI_API_KEYS == ["a", "n2", "n10", "b", "c"]
-        assert config.GEMINI_MODELS == ["m1", "m2", "m3"]
-    finally:
-        monkeypatch.undo()
-        importlib.reload(config)
+    settings = load_settings({
+        "GEMINI_API_KEY": "a",
+        "GEMINI_API_KEY_10": "n10",  # numeric (not alphabetical) order: _2 before _10
+        "GEMINI_API_KEY_2": "n2",
+        "GEMINI_API_KEYS": "b, a ,your-key-here,,c",
+        "GEMINI_FALLBACK_MODELS": "m2, m3",
+        "GEMINI_MODEL": "m1",
+    })
+    # single key first, then numbered keys, then the list; deduplicated, placeholder dropped
+    assert settings.gemini_api_keys == ["a", "n2", "n10", "b", "c"]
+    assert settings.gemini_models == ["m1", "m2", "m3"]
 
 
 def test_invalid_key_answered_with_400_is_treated_as_rejected(monkeypatch, page):
@@ -192,11 +188,11 @@ def test_invalid_key_answered_with_400_is_treated_as_rejected(monkeypatch, page)
 
 
 def test_tests_never_see_real_api_keys():
-    """conftest sets APP_ENV=test before config loads, so backend/.env secrets can't leak into test output."""
+    """conftest sets APP_ENV=test before the settings load, so backend/.env secrets can't leak into test output."""
     import os
 
-    import config
+    from config import load_settings
 
     assert os.environ.get("APP_ENV") == "test"
-    assert config.OPENAI_API_KEY == ""
+    assert load_settings().openai_api_key == ""
     assert not [n for n in os.environ if n.startswith("GEMINI_API_KEY")]
