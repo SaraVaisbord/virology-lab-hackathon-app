@@ -1,7 +1,7 @@
 """
 local_eval.py - Field-level evaluation of the local extractor (no LLM calls, no tokens).
 
-    python local_eval.py <folder with PDFs> --reference-db path/to/app.db
+    python -m scripts.local_eval <folder with PDFs> --reference-db path/to/app.db
 
 The reference is what an earlier LLM run extracted (NOT ground truth). For every value the local extractor
 assigned to a field it reports whether the LLM put the same value in the same field, in a different field
@@ -26,7 +26,7 @@ from PIL import Image
 import barcode_reader
 import local_extractor
 from preprocessing import preprocess
-from preprocessing_eval import load_native_page
+from scripts.preprocessing_eval import load_native_page
 
 EVAL_FIELDS = ("central_number", "commitment_number", "id_number", "received_date")
 

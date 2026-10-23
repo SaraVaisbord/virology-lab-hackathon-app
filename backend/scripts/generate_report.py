@@ -1,6 +1,6 @@
 """
 generate_report.py - Generate a human-readable PDF report of detected barcodes.
-Usage: python generate_report.py path/to/input.pdf
+Usage: python -m scripts.generate_report path/to/input.pdf
 Output: input_report.pdf (next to the input file)
 """
 
@@ -316,7 +316,7 @@ def generate_report(pdf_path: str) -> str:
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python generate_report.py path/to/file.pdf")
+        print("Usage: python -m scripts.generate_report path/to/file.pdf")
         sys.exit(1)
     generate_report(sys.argv[1])
 

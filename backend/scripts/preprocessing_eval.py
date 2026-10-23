@@ -1,7 +1,7 @@
 """
 preprocessing_eval.py - Measure what preprocessing buys, locally (no LLM calls, no tokens).
 
-    python preprocessing_eval.py <folder with PDFs> [--reference-db path/to/app.db]
+    python -m scripts.preprocessing_eval <folder with PDFs> [--reference-db path/to/app.db]
 
 For every page it compares the OLD input (page re-rendered at 200 dpi and shrunk to 2000 px, no cleanup)
 with the NEW one (native-resolution scan + preprocessing.py) on:

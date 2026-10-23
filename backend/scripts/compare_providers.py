@@ -1,7 +1,7 @@
 """
 compare_providers.py - Compare Gemini and OpenAI on the SAME page, through the SAME verification rules.
 
-    python compare_providers.py <form_id> [--openai-model gpt-5.4-mini]
+    python -m scripts.compare_providers <form_id> [--openai-model gpt-5.4-mini]
 
 Read-only: uses the Gemini answer and barcodes already stored for the form (no new Gemini call) and asks
 OpenAI once. Nothing is written to the database, so it can run next to the live server/queue.

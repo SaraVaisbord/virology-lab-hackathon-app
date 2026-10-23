@@ -176,7 +176,7 @@ CLAUDE_QUOTA_DEFAULT_BACKOFF_SECONDS = _env_int("CLAUDE_QUOTA_DEFAULT_BACKOFF_SE
 CLAUDE_BUSY_COOLDOWN_SECONDS = _env_int("CLAUDE_BUSY_COOLDOWN_SECONDS", 90)  # overloaded / 5xx / timeout / network
 CLAUDE_INVALID_KEY_COOLDOWN_SECONDS = _env_int("CLAUDE_INVALID_KEY_COOLDOWN_SECONDS", 3600)  # 401/403 key rejected
 
-# ── OpenAI (used for provider comparison: compare_providers.py) ─────────────
+# ── OpenAI (used for provider comparison: scripts/compare_providers.py) ─────────────
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY") or "").strip()  # either spelling
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")  # same tier as Gemini Flash, for a fair comparison
 OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
