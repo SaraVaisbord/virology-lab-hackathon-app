@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from config import Settings
-from db.repositories import CorrectionHistory, FormListing, FormRepository, ReviewRepository, SenderRepository
+from db.repositories import CorrectionHistory, FormListing, FormRepository, LoginCodeRepository, ReviewRepository, SenderRepository
 from db.session import Database
 from domain.verification import VerificationRules
 from integrations.imaging.barcode import scan_pil_image
@@ -145,5 +145,6 @@ def build_container(settings: Settings, *, llm_providers: dict[str, LlmProvider]
         reviews=ReviewService(forms, review, storage, queue),
         exports=ExportService(listing, settings.export_max_rows),
         insights=InsightsService(history, senders, insight_thresholds(settings)),
-        auth=AuthService(auth_settings(settings, smtp.settings.configured), mailer if mailer is not None else smtp),
+        auth=AuthService(auth_settings(settings, smtp.settings.configured), mailer if mailer is not None else smtp,
+                         LoginCodeRepository(sessions)),
     )

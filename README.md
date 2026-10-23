@@ -99,7 +99,7 @@ All settings live in `backend/.env` (never committed); defaults are in `backend/
 | `LLM_ENABLED` | `false` runs only the local stages (no tokens) |
 | `AUTH_ENABLED` | Login screen on/off (default on) |
 | `AUTH_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Where login codes are sent, and how |
-| `AUTH_SECRET` | Signs session cookies, so sessions survive a restart |
+| `AUTH_SECRET` | Signs session cookies, so sessions survive a restart. Required when more than one replica serves the API (the pending login code itself is kept in the database, as a salted hash) |
 | `AUTH_DEMO_CODE` | **Demo only:** no e-mail is sent and this fixed code logs in. Remove before real data |
 | `LLM_CA_BUNDLE` | A CA file (PEM) to trust for the AI providers' connections — e.g. behind a filtering proxy with its own certificate |
 | `LLM_INSECURE_SSL` | **Local development only:** skip certificate checks of the AI connections (default off; never the rest of the process) |

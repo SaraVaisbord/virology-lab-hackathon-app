@@ -3,7 +3,9 @@
 from db.repositories.forms import FormRepository
 from db.repositories.history import CorrectionHistory
 from db.repositories.listing import FormFilters, FormListing
+from db.repositories.login_codes import LoginCodeRepository
 from db.repositories.review import ReviewRepository
 from db.repositories.senders import SenderRepository
 
-__all__ = ["CorrectionHistory", "FormFilters", "FormListing", "FormRepository", "ReviewRepository", "SenderRepository"]
+__all__ = ["CorrectionHistory", "FormFilters", "FormListing", "FormRepository", "LoginCodeRepository", "ReviewRepository",
+           "SenderRepository"]

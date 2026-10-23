@@ -101,3 +101,82 @@ def test_demo_mode_any_address_and_the_fixed_code(auth_app):
     assert client.post("/auth/verify", json={"code": "123456"}).status_code == 400
     assert client.post("/auth/verify", json={"code": "424242"}).status_code == 200
     assert client.get("/forms").status_code == 200
+
+
+# ── The pending code lives in the database (login_codes) ─────────────────────
+
+
+def _login_code_rows(settings):
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(settings.database_url, future=True)
+    try:
+        with engine.connect() as conn:
+            return conn.execute(text("SELECT code_hash, salt, attempts FROM login_codes")).all()
+    finally:
+        engine.dispose()
+
+
+def test_a_code_works_after_a_restart_and_on_another_replica(auth_app, settings):
+    first, sent = auth_app(auth_secret="shared-secret")
+    first.post("/auth/request-code")
+    [code] = sent
+    [(code_hash, salt, attempts)] = _login_code_rows(settings)
+    assert code not in code_hash + salt and attempts == 0  # only a salted hash is stored
+
+    second, _ = auth_app(auth_secret="shared-secret")  # another process, same database
+    assert second.post("/auth/verify", json={"code": "999999" if code != "999999" else "111111"}).status_code == 400
+    assert _login_code_rows(settings)[0][2] == 1  # the wrong attempt is counted in the database
+    response = second.post("/auth/verify", json={"code": code})
+    assert response.status_code == 200
+    assert _login_code_rows(settings) == []  # used up
+    # The session signed by one replica is valid on the other (same AUTH_SECRET).
+    first.cookies.set(settings.auth_cookie_name, second.cookies.get(settings.auth_cookie_name))
+    assert first.get("/forms").status_code == 200
+
+
+def test_expired_and_replaced_codes_are_deleted(auth_app, settings):
+    client, sent = auth_app()
+    client.post("/auth/request-code")
+    client.post("/auth/request-code")
+    assert len(_login_code_rows(settings)) == 1  # a new code replaces the previous one
+    assert client.post("/auth/verify", json={"code": sent[0]}).status_code == 400  # the replaced code is void
+    assert client.post("/auth/verify", json={"code": sent[1]}).status_code == 200
+
+    expired, sent = auth_app(auth_code_ttl_minutes=0)
+    expired.post("/auth/request-code")
+    assert expired.post("/auth/verify", json={"code": sent[0]}).status_code == 400
+    assert _login_code_rows(settings) == []  # the expired code was deleted
+
+
+def test_mail_failure_leaves_no_pending_code(auth_app, settings):
+    import smtplib
+
+    client, sent = auth_app()
+
+    def broken(to, subject, body):
+        raise smtplib.SMTPException("down")
+
+    client.app.state.container.auth._mailer.send = broken
+    assert client.post("/auth/request-code").status_code == 400
+    assert _login_code_rows(settings) == []
+
+
+def test_migration_adds_and_removes_the_login_codes_table(settings):
+    from alembic import command
+    from sqlalchemy import create_engine, inspect
+
+    from tests.conftest import alembic_config
+
+    def tables():
+        engine = create_engine(settings.database_url, future=True)
+        try:
+            return set(inspect(engine).get_table_names())
+        finally:
+            engine.dispose()
+
+    assert "login_codes" in tables()
+    command.downgrade(alembic_config(), "e5f6a7b8c9d0")
+    assert "login_codes" not in tables() and "field_events" in tables()
+    command.upgrade(alembic_config(), "head")
+    assert "login_codes" in tables()
