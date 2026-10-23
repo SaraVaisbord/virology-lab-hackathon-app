@@ -46,7 +46,7 @@ class VerificationRules:
 _CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
 _BOX_SCALE = 1000  # Gemini box_2d coordinates are normalized to 0..1000
 # zbar sometimes reports a 1-pixel scan line instead of the barcode area; such boxes are useless for highlighting.
-_MIN_BARCODE_BOX_SIDE = 0.005
+MIN_BOX_SIDE = 0.005
 # Near-match (one character off) is only meaningful for reasonably long codes.
 _NEAR_MATCH_MIN_LENGTH = 4
 _BOX_KEYS = ("x", "y", "width", "height")
@@ -71,7 +71,7 @@ def _one_edit_apart(a: str, b: str) -> bool:
     return any(longer[:i] + longer[i + 1:] == shorter for i in range(len(longer)))
 
 
-def _box_from_gemini(candidate: dict[str, Any]) -> dict[str, float] | None:
+def box_from_llm(candidate: dict[str, Any]) -> dict[str, float] | None:
     box = candidate.get("box_2d")
     if not (isinstance(box, list) and len(box) == 4 and all(isinstance(v, (int, float)) for v in box)):
         return None
@@ -82,7 +82,7 @@ def _box_from_gemini(candidate: dict[str, Any]) -> dict[str, float] | None:
 
 
 def _box_from_barcode(barcode: dict[str, Any]) -> dict[str, float] | None:
-    if min(barcode.get("width") or 0, barcode.get("height") or 0) < _MIN_BARCODE_BOX_SIDE:
+    if min(barcode.get("width") or 0, barcode.get("height") or 0) < MIN_BOX_SIDE:
         return None
     return {key: barcode[key] for key in _BOX_KEYS}
 
@@ -155,7 +155,7 @@ def _evaluate(field_name: str, key: str, llm: dict[str, Any] | None, local: dict
     llm_raw = str(llm.get("value") or "").strip() if llm else None
     llm_confidence = llm.get("confidence") if llm and llm.get("confidence") in CONFIDENCE_LEVELS else None
     llm_label = str(llm.get("label") or "").strip() if llm else ""
-    llm_box = _box_from_gemini(llm) if llm else None
+    llm_box = box_from_llm(llm) if llm else None
     local_source = local["source"] if local else None
     ocr_raw = local["raw"] if local and local_source.startswith("ocr") else None
     # The OCR may have read the same number somewhere on the page without a label: that confirms the READING

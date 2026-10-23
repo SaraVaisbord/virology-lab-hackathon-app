@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, object_session
 
 from db.models import ExtractedField, Form
 from domain import review_rules
+from domain.page_numbers import page_numbers
 from domain.validators import digits_only
 from domain.vocabulary import PENDING_FORM_STATUSES, ROW_KEY_FIELD
 
@@ -114,6 +115,7 @@ def form_to_dict(form: Form, *, with_fields: bool = True, with_sources: bool = F
         data["duplicates"] = duplicates
     if with_sources:
         data["sources"] = {name: from_json(getattr(form, name)) for name in SOURCE_COLUMNS}
+        data["page_numbers"] = page_numbers(data["sources"])
     return data
 
 

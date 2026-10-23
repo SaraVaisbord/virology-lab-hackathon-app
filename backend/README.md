@@ -72,7 +72,7 @@ uvicorn main:app --port 8000
 | GET | `/forms` | רשימה עם דפדוף – `limit`, `offset`, `status`, `query`, `sort_by`, `sort_dir`, `filter_<עמודה>` |
 | GET | `/forms/summary` | ספירה לפי סטטוס + מצב התור |
 | GET | `/forms/export` | אקסל – `mode=all\|filtered\|approved` + אותם סינונים |
-| GET | `/forms/{id}` | טופס אחד, כולל מה שכל מקור קרא ומספרי התחייבות כפולים |
+| GET | `/forms/{id}` | טופס אחד, כולל מה שכל מקור קרא (`sources`), כל המספרים שנמצאו בעמוד ממוזגים בין המקורות (`page_numbers`) ומספרי התחייבות כפולים |
 | GET | `/forms/{id}/image` | תמונת העמוד |
 | PATCH | `/forms/{id}/fields/{field_id}/confirm` | אישור ערך (אפשר עם תיקון: `{"corrected_value": "..."}`) |
 | POST | `/forms/{id}/fields` | הוספת ערך ידנית / בחירת מספר מהעמוד |

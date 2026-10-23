@@ -26,7 +26,7 @@ export default function PageNumberRow({ item, focused, usedBy = [], onShow, assi
             type="button"
             onClick={() => onShow(item)}
             disabled={!item.box}
-            title={item.box ? `הצג במסמך (מיקום לפי ${meta.source_labels[item.boxSource]})` : 'אין מיקום לערך זה'}
+            title={item.box ? `הצג במסמך (מיקום לפי ${meta.source_labels[item.box_source]})` : 'אין מיקום לערך זה'}
             aria-label={`הצג את ${item.value} במסמך`}
             className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-1.5 py-1 text-[11px] text-gray-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-800"
           >

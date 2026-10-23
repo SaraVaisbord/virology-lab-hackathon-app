@@ -664,6 +664,13 @@
       "title": "Page Number",
       "type": "integer"
      },
+     "page_numbers": {
+      "items": {
+       "$ref": "#/components/schemas/PageNumber"
+      },
+      "title": "Page Numbers",
+      "type": "array"
+     },
      "rejected_values": {
       "additionalProperties": {
        "items": {
@@ -1016,6 +1023,101 @@
      "by_field"
     ],
     "title": "InsightsCoverage",
+    "type": "object"
+   },
+   "NumberBox": {
+    "properties": {
+     "height": {
+      "title": "Height",
+      "type": "number"
+     },
+     "width": {
+      "title": "Width",
+      "type": "number"
+     },
+     "x": {
+      "title": "X",
+      "type": "number"
+     },
+     "y": {
+      "title": "Y",
+      "type": "number"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "width",
+     "height"
+    ],
+    "title": "NumberBox",
+    "type": "object"
+   },
+   "PageNumber": {
+    "description": "A number (or date) found on the page by any source — see domain/page_numbers.py.",
+    "properties": {
+     "box": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/NumberBox"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "box_source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Box Source"
+     },
+     "boxes": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/NumberBox"
+      },
+      "title": "Boxes",
+      "type": "object"
+     },
+     "is_date": {
+      "default": false,
+      "title": "Is Date",
+      "type": "boolean"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "notes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+     },
+     "sources": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Sources",
+      "type": "array"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "value",
+     "sources"
+    ],
+    "title": "PageNumber",
     "type": "object"
    },
    "QueueState": {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileSearch, Loader2, RotateCcw } from 'lucide-react'
 import ModalShell from '../ui/ModalShell'
 import StatusBadge from '../ui/StatusBadge'
@@ -10,7 +10,6 @@ import PageSources from './PageSources'
 import { api } from '../../api'
 import { useMeta } from '../../meta/MetaContext'
 import { fieldDisplayValue, formatDateTime } from '../../lib/format'
-import { pageNumbers } from '../../lib/pageNumbers'
 import { FIELD_STATUS, FORM_STATUS } from '../../lib/domainKeys'
 
 /** Next field that still needs a decision, searching forward from the current one (wrapping around). */
@@ -51,11 +50,8 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
   const addField = (fieldName, value) => applyEdit(() => api.addField(form.id, fieldName, value))
   const deleteField = (fieldId) => applyEdit(() => api.deleteField(form.id, fieldId))
 
-  // Numbers found on the page (all sources merged) — can be shown on the document and picked into a field.
-  const numbers = useMemo(
-    () => pageNumbers(form.sources, { fieldKeys: meta.fields.map((field) => field.key), datePattern: meta.datePattern }),
-    [form.sources, meta],
-  )
+  // Numbers found on the page (all sources merged, by the server) — can be shown on the document and picked into a field.
+  const numbers = form.page_numbers ?? []
   const [focus, setFocus] = useState(null)
   // Commitment number shared with another form: shown side by side, the lab worker decides.
   const [compare, setCompare] = useState(null)
@@ -66,7 +62,7 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
     return applyEdit(() => api.addField(form.id, fieldName, item.value, {
       replace: hasValue && !meta.isMultiValue(fieldName), // a single-value field takes the picked value instead
       box: item.box,
-      picked_from: item.box ? item.boxSource : item.sources[0],
+      picked_from: item.box ? item.box_source : item.sources[0],
     }))
   }
 

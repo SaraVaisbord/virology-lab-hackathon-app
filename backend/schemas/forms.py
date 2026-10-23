@@ -74,8 +74,29 @@ class FormSources(BaseModel):
     source_errors: dict[str, str] | None = None
 
 
+class NumberBox(BaseModel):
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+class PageNumber(BaseModel):
+    """A number (or date) found on the page by any source — see domain/page_numbers.py."""
+
+    key: str  # comparison key: digits, or DDMMYYYY for a date
+    value: str  # as first read
+    sources: list[str]  # which sources read it (SOURCE_LABELS keys)
+    boxes: dict[str, NumberBox] = Field(default_factory=dict)  # where each source saw it
+    notes: list[str] = Field(default_factory=list)  # labels / barcode types next to it
+    box: NumberBox | None = None  # the most precise location (barcode, then OCR, then LLM)
+    box_source: str | None = None
+    is_date: bool = False
+
+
 class FormDetailResponse(FormResponse):
     sources: FormSources
+    page_numbers: list[PageNumber] = Field(default_factory=list)
 
 
 class FormsPage(BaseModel):
