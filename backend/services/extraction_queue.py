@@ -14,8 +14,8 @@ import time
 from datetime import datetime, timezone
 
 import config
-from ai_extractor import ModelsUnavailableError
 from db import queries
+from integrations.llm.errors import ModelsUnavailableError
 from services.extraction_service import extract_for_form, user_facing_error
 
 logger = logging.getLogger(__name__)

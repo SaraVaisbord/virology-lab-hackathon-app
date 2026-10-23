@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from db.constants import FIELDS
-from openai_extractor import _drop_nulls, strict_schema
+from integrations.llm.openai import drop_nulls, strict_schema
 
 
 def test_strict_schema_is_generated_from_the_same_field_list():
@@ -17,4 +17,4 @@ def test_strict_schema_is_generated_from_the_same_field_list():
 
 def test_nulls_from_strict_mode_are_dropped_like_gemini_omits_them():
     answer = {"central_number": [{"value": "1", "confidence": "high", "label": None, "box_2d": None}], "notes": None}
-    assert _drop_nulls(answer) == {"central_number": [{"value": "1", "confidence": "high"}]}
+    assert drop_nulls(answer) == {"central_number": [{"value": "1", "confidence": "high"}]}

@@ -30,7 +30,6 @@ import cv2
 import numpy as np
 from PIL import Image
 
-import ai_extractor
 import barcode_reader
 import config
 import local_extractor
@@ -50,6 +49,7 @@ from db.constants import (
     SAMPLE_IS_COMMITMENT_FORM_TYPES,
     label_keywords,
 )
+from integrations.llm.errors import ExtractionError, MissingApiKeyError, ModelsUnavailableError
 from preprocessing import preprocess
 from services import llm_router
 from storage import get_storage
@@ -368,11 +368,11 @@ def build_fields(
 
 def user_facing_error(exc: Exception) -> str:
     """Short Hebrew message for the UI; technical details are logged, never shown or stored."""
-    if isinstance(exc, ai_extractor.MissingApiKeyError):
+    if isinstance(exc, MissingApiKeyError):
         return EXTRACTION_ERRORS["config"]
-    if isinstance(exc, ai_extractor.ModelsUnavailableError):
+    if isinstance(exc, ModelsUnavailableError):
         return EXTRACTION_ERRORS["quota"]
-    if isinstance(exc, ai_extractor.ExtractionError):
+    if isinstance(exc, ExtractionError):
         return EXTRACTION_ERRORS["timeout" if "timed out" in str(exc).lower() else "model"]
     if isinstance(exc, FileNotFoundError):
         return EXTRACTION_ERRORS["image_missing"]

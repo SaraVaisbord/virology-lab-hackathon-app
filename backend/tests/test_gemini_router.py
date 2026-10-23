@@ -1,4 +1,5 @@
-"""Gemini key/model routing — no real API calls (a fake client simulates Google's answers and errors)."""
+"""Gemini key/model routing (integrations/llm/gemini.py) — no real API calls (a fake client simulates Google's
+answers and errors)."""
 
 from __future__ import annotations
 
@@ -6,11 +7,14 @@ import importlib
 import json
 import logging
 import time
+from pathlib import Path
 
 import pytest
 
-import ai_extractor
-from ai_extractor import ExtractionError, GeminiRouter, ModelsUnavailableError
+from integrations.llm.errors import ExtractionError, ModelsUnavailableError
+from integrations.llm.gemini import GeminiProvider, GeminiSettings
+from integrations.llm.page_image import PageImageSettings
+from integrations.llm.prompt import ExtractionPrompt
 from tests.conftest import png_bytes
 
 KEYS = ["SECRET-KEY-ONE", "SECRET-KEY-TWO"]
@@ -29,9 +33,9 @@ class FakeResponse:
         self.text = text
 
 
-def _router(behaviour: dict) -> tuple[GeminiRouter, list]:
-    """behaviour[(key_index, model)] = Exception to raise or response text; missing → good JSON."""
-    router = GeminiRouter(KEYS, MODELS)
+def _gemini(behaviour: dict) -> tuple[GeminiProvider, list]:
+    """behaviour[(key_index, model)] = Exception to raise or response text; missing → good JSON.
+    Returns the provider (its routes: provider.router.routes) and the (key_index, model) of every call."""
     calls = []
 
     class Models:
@@ -49,8 +53,11 @@ def _router(behaviour: dict) -> tuple[GeminiRouter, list]:
         def __init__(self, key_index):
             self.models = Models(key_index)
 
-    router.client = lambda key_index: Client(key_index)
-    return router, calls
+    settings = GeminiSettings(api_keys=KEYS, models=MODELS, timeout_seconds=120, max_attempts=2,
+                              quota_default_backoff_seconds=60, busy_cooldown_seconds=90, invalid_key_cooldown_seconds=3600)
+    prompt = ExtractionPrompt(Path(__file__).resolve().parents[1] / "prompts" / "extraction_prompt.md")
+    provider = GeminiProvider(settings, prompt, PageImageSettings(max_side_px=1600, jpeg_quality=80), new_client=Client)
+    return provider, calls
 
 
 @pytest.fixture
@@ -60,86 +67,74 @@ def page(tmp_path):
     return path
 
 
-def _use(monkeypatch, router):
-    monkeypatch.setattr(ai_extractor, "get_router", lambda: router)
-
-
 def test_quota_on_first_key_moves_to_second_key(monkeypatch, page):
-    router, calls = _router({(0, "primary-model"): FakeApiError(429, "RESOURCE_EXHAUSTED retry in 30s")})
-    _use(monkeypatch, router)
+    gemini, calls = _gemini({(0, "primary-model"): FakeApiError(429, "RESOURCE_EXHAUSTED retry in 30s")})
 
-    result = ai_extractor.extract_from_image(page)
+    result = gemini.extract_from_image(page)
     assert calls == [(0, "primary-model"), (1, "primary-model")]
     assert result["_model"] == "primary-model"
-    first = router.routes[0]
+    first = gemini.router.routes[0]
     assert first.last_problem == "quota" and 25 < first.resting_until - time.time() <= 30
 
 
 def test_overloaded_model_falls_back_to_next_model(monkeypatch, page):
     busy = FakeApiError(503, "UNAVAILABLE high demand")
-    router, calls = _router({(0, "primary-model"): busy, (1, "primary-model"): busy})
-    _use(monkeypatch, router)
+    gemini, calls = _gemini({(0, "primary-model"): busy, (1, "primary-model"): busy})
 
-    assert ai_extractor.extract_from_image(page)["_model"] == "fallback-model"
+    assert gemini.extract_from_image(page)["_model"] == "fallback-model"
     # An overloaded model is Google's capacity, not the key's: the page is not sent to it again with key #2.
     assert calls == [(0, "primary-model"), (0, "fallback-model")]
 
 
 def test_resting_routes_are_skipped_on_the_next_page(monkeypatch, page):
-    router, calls = _router({(0, "primary-model"): FakeApiError(429, "RESOURCE_EXHAUSTED")})
-    _use(monkeypatch, router)
-    ai_extractor.extract_from_image(page)
+    gemini, calls = _gemini({(0, "primary-model"): FakeApiError(429, "RESOURCE_EXHAUSTED")})
+    gemini.extract_from_image(page)
     calls.clear()
 
-    ai_extractor.extract_from_image(page)
+    gemini.extract_from_image(page)
     assert calls == [(1, "primary-model")]  # key #1 is still resting (quota is per key)
 
 
 def test_overloaded_model_rests_on_every_key(monkeypatch, page):
-    router, calls = _router({(0, "primary-model"): FakeApiError(504, "DEADLINE_EXCEEDED")})
-    _use(monkeypatch, router)
-    ai_extractor.extract_from_image(page)
+    gemini, calls = _gemini({(0, "primary-model"): FakeApiError(504, "DEADLINE_EXCEEDED")})
+    gemini.extract_from_image(page)
     calls.clear()
 
-    ai_extractor.extract_from_image(page)
+    gemini.extract_from_image(page)
     assert calls == [(0, "fallback-model")]  # the primary model rests on both keys
 
 
 def test_all_routes_out_of_quota_pauses_until_the_earliest(monkeypatch, page):
     behaviour = {(k, m): FakeApiError(429, f"retry in {10 + 10 * k}s") for k in range(2) for m in MODELS}
-    router, _ = _router(behaviour)
-    _use(monkeypatch, router)
+    gemini, _ = _gemini(behaviour)
 
     with pytest.raises(ModelsUnavailableError) as info:
-        ai_extractor.extract_from_image(page)
+        gemini.extract_from_image(page)
     assert info.value.reason == "quota"
     assert 5 < info.value.retry_after_seconds <= 10
 
 
 def test_mixed_quota_and_overload_is_reported_as_busy(monkeypatch, page):
     behaviour = {(k, m): FakeApiError(429 if m == "primary-model" else 503) for k in range(2) for m in MODELS}
-    router, _ = _router(behaviour)
-    _use(monkeypatch, router)
+    gemini, _ = _gemini(behaviour)
 
     with pytest.raises(ModelsUnavailableError) as info:
-        ai_extractor.extract_from_image(page)
+        gemini.extract_from_image(page)
     assert info.value.reason == "busy"
 
 
 def test_rejected_key_rests_all_its_models(monkeypatch, page):
-    router, calls = _router({(0, "primary-model"): FakeApiError(403, "PERMISSION_DENIED")})
-    _use(monkeypatch, router)
-    ai_extractor.extract_from_image(page)
+    gemini, calls = _gemini({(0, "primary-model"): FakeApiError(403, "PERMISSION_DENIED")})
+    gemini.extract_from_image(page)
 
-    resting_key_one = [r.resting_until > time.time() for r in router.routes if r.key_index == 0]
+    resting_key_one = [r.resting_until > time.time() for r in gemini.router.routes if r.key_index == 0]
     assert resting_key_one == [True, True]
 
 
 def test_non_route_error_fails_immediately(monkeypatch, page):
-    router, calls = _router({(0, "primary-model"): FakeApiError(400, "INVALID_ARGUMENT bad schema")})
-    _use(monkeypatch, router)
+    gemini, calls = _gemini({(0, "primary-model"): FakeApiError(400, "INVALID_ARGUMENT bad schema")})
     with pytest.raises(ExtractionError) as info:
-        ai_extractor.extract_from_image(page)
+        gemini.extract_from_image(page)
     assert not isinstance(info.value, ModelsUnavailableError)
     assert calls == [(0, "primary-model")]
 
@@ -147,11 +142,10 @@ def test_non_route_error_fails_immediately(monkeypatch, page):
 def test_unusable_answers_fail_the_page_instead_of_looping(monkeypatch, page):
     """A page that keeps producing broken JSON must not be re-queued forever (that would burn tokens)."""
     behaviour = {(k, m): '{"broken' for k in range(2) for m in MODELS}
-    router, calls = _router(behaviour)
-    _use(monkeypatch, router)
+    gemini, calls = _gemini(behaviour)
 
     with pytest.raises(ExtractionError) as info:
-        ai_extractor.extract_from_image(page)
+        gemini.extract_from_image(page)
     assert not isinstance(info.value, ModelsUnavailableError)
     assert len(calls) == 2  # GEMINI_MAX_ATTEMPTS
 
@@ -159,11 +153,10 @@ def test_unusable_answers_fail_the_page_instead_of_looping(monkeypatch, page):
 def test_keys_and_model_output_never_reach_logs_or_errors(monkeypatch, page, caplog):
     leak = '{"first_name": [{"value": "ישראל ישראלי"'
     behaviour = {(0, "primary-model"): FakeApiError(429), (1, "primary-model"): leak, (0, "fallback-model"): leak}
-    router, _ = _router(behaviour)
-    _use(monkeypatch, router)
+    gemini, _ = _gemini(behaviour)
 
     with caplog.at_level(logging.WARNING), pytest.raises(ExtractionError) as info:
-        ai_extractor.extract_from_image(page)
+        gemini.extract_from_image(page)
     everything = caplog.text + str(info.value)
     assert "key #1" in caplog.text
     assert not any(key in everything for key in KEYS)
@@ -191,12 +184,11 @@ def test_key_list_config(monkeypatch):
 
 def test_invalid_key_answered_with_400_is_treated_as_rejected(monkeypatch, page):
     invalid = FakeApiError(400, "INVALID_ARGUMENT API key not valid. Please pass a valid API key.")
-    router, calls = _router({(0, "primary-model"): invalid})
-    _use(monkeypatch, router)
+    gemini, calls = _gemini({(0, "primary-model"): invalid})
 
-    assert ai_extractor.extract_from_image(page)["_model"] == "primary-model"
+    assert gemini.extract_from_image(page)["_model"] == "primary-model"
     assert calls == [(0, "primary-model"), (1, "primary-model")]
-    assert all(r.last_problem == "rejected_key" for r in router.routes if r.key_index == 0)
+    assert all(r.last_problem == "rejected_key" for r in gemini.router.routes if r.key_index == 0)
 
 
 def test_tests_never_see_real_api_keys():

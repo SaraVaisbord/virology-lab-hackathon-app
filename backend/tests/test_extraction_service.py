@@ -355,10 +355,10 @@ def test_reverify_uses_stored_sources_without_calling_the_llm(app_env, monkeypat
 
 
 def test_retry_delay_is_parsed_from_gemini_message():
-    from ai_extractor import _retry_after_seconds
+    from integrations.llm.gemini import retry_after_seconds
 
-    assert _retry_after_seconds("Please retry in 3h40m34.49s.") == 3 * 3600 + 40 * 60 + 34.49
-    assert _retry_after_seconds("Please retry in 13.2s") == 13.2
+    assert retry_after_seconds("Please retry in 3h40m34.49s.", 60) == 3 * 3600 + 40 * 60 + 34.49
+    assert retry_after_seconds("Please retry in 13.2s", 60) == 13.2
 
 
 def test_one_off_extraction_with_openai_provider(app_env, monkeypatch, fake_local_sources):

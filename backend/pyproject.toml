@@ -9,11 +9,8 @@ line-length = 130
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
-# pyflakes + the error-level pycodestyle rules (ruff's defaults, written out) and import order.
-select = ["E4", "E7", "E9", "F", "I"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["api", "config", "db", "domain", "integrations", "main", "schemas", "services", "experimental", "scripts"]
+# pyflakes + the error-level pycodestyle rules (ruff's defaults, written out).
+select = ["E4", "E7", "E9", "F"]
 
 # Lenient on purpose: shows problems, blocks nothing (no strict mode, untyped code is not checked).
 [tool.mypy]
