@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from itertools import islice
@@ -15,10 +16,12 @@ import pymupdf
 from PIL import Image, ImageOps
 
 from db.repositories import FormRepository
-from domain.vocabulary import UPLOAD_TYPES
+from domain.vocabulary import UPLOAD_FAILED_MESSAGE, UPLOAD_TYPES
 from integrations.imaging.preprocessing import straighten
 from integrations.ocr.base import OcrEngine
 from integrations.storage import PAGES_PREFIX, UPLOADS_PREFIX, Storage, page_key, upload_key
+
+logger = logging.getLogger(__name__)
 
 _ILLEGAL_FILENAME_CHARS = set('/\\:*?"<>|')
 # A page whose only image covers at least this share of it is a scan — use that image instead of re-rendering.
@@ -132,6 +135,9 @@ class UploadService:
                         form_ids.append(self._forms.add_form(source_file=original_name, file_hash=file_hash,
                                                              page_number=page_number, image_path=key))
             return _result(original_name, "created", form_ids)
-        except Exception as exc:
+        except Exception:
+            # The full error goes to the server log only (by the file's hash: a file name may name a patient);
+            # the client gets a general message.
+            logger.exception("Upload %s… failed while storing / splitting its pages", file_hash[:12])
             self._cleanup(file_hash)
-            return _result(original_name, "rejected", error=str(exc))
+            return _result(original_name, "rejected", error=UPLOAD_FAILED_MESSAGE)

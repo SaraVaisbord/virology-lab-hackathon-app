@@ -271,6 +271,9 @@ UPLOAD_TYPES = {
     "jpeg": {"magic": b"\xff\xd8\xff", "mime": "image/jpeg", "extensions": (".jpg", ".jpeg")},
 }
 
+# An upload that failed while it was being stored or split into pages (the details go to the server log only).
+UPLOAD_FAILED_MESSAGE = "עיבוד הקובץ נכשל – אפשר לנסות להעלות אותו שוב"
+
 # User-facing extraction failure messages (technical details go to the server log only).
 EXTRACTION_ERRORS = {
     "image_missing": "קובץ התמונה של העמוד לא נמצא",

@@ -83,3 +83,20 @@ def test_upload_endpoint_queues_and_image_is_served(client):
     assert image.status_code == 200 and image.headers["content-type"].startswith("image/png")
     assert client.get("/forms/999999/image").status_code == 404
     assert client.get(f"/forms/{form_id}").json()["status"] == "uploaded"
+
+
+def test_a_failed_upload_tells_the_client_only_a_general_message(container, monkeypatch, caplog):
+    """The technical error (paths, internals) goes to the server log; the client gets the general message."""
+    import logging
+
+    from domain.vocabulary import UPLOAD_FAILED_MESSAGE
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("could not write C:/internal/path/secret.png")
+
+    monkeypatch.setattr(container.forms, "add_form", broken)
+    with caplog.at_level(logging.ERROR):
+        result = container.uploads.process_upload("ישראל ישראלי.pdf", _pdf_with_pages(1))
+    assert result["status"] == "rejected" and result["error"] == UPLOAD_FAILED_MESSAGE
+    assert "C:/internal/path/secret.png" in caplog.text  # full details in the server log
+    assert "ישראל ישראלי" not in caplog.text  # the file name (it may name a patient) is not logged
