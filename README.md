@@ -107,12 +107,15 @@ All settings live in `backend/.env` (never committed); defaults are in `backend/
 
 ```bash
 cd backend
+pip install -r requirements-dev.txt                         # pytest, ruff, mypy
 pytest                                                      # SQLite
 TEST_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/db pytest   # PostgreSQL, as on AWS RDS
 ```
 
 The suite covers the extraction pipeline, cross-validation rules, provider failover, the correction history,
-insights, login and the API. No test ever calls a real AI provider or reads real API keys.
+insights, login and the API; snapshot tests (`tests/snapshots/`) pin the API contract and the output of the
+verification rules. No test ever calls a real AI provider or reads real API keys. Lint: `ruff check .` · types
+(advisory, not blocking): `mypy .`
 
 ## API overview
 
@@ -135,18 +138,25 @@ More detail on the backend: [`backend/README.md`](backend/README.md) · System d
 
 ```
 backend/
-  api/                  HTTP endpoints (auth, uploads, forms, insights, meta)
-  db/                   models, queries, and constants.py — the single source of truth for fields, labels, statuses
-  services/             extraction queue, cross-validation, provider failover, insights, export, login
-  preprocessing.py      page preprocessing
-  local_extractor.py    local OCR: labels → values
-  claude_extractor.py   Claude provider
-  ai_extractor.py       Gemini provider (key and model rotation)
+  main.py               server entry point (uvicorn main:app)
+  config.py             Settings: every value read once from the environment / .env
+  container.py          composition root: builds every component from the settings and wires them together
+  api/                  HTTP endpoints (auth, uploads, forms, insights, meta); components come in as dependencies
+  services/             use cases: extraction pipeline and queue, uploads, review, export, insights, login
+  domain/               the lab's rules, no I/O: vocabulary (fields, labels, statuses), validators, verification, review rules
+  db/                   models, session (Database) and repositories/ — data access per aggregate
+  integrations/         the outside world: llm/ (Gemini, Claude, OpenAI + failover), ocr/ (Tesseract, label → value),
+                        imaging/ (preprocessing, barcodes), storage (local / S3), mailer (SMTP)
+  experimental/         measured but not wired in (handwritten digits)
+  scripts/              command-line tools (extract_forms, compare_providers, evaluations)
   prompts/              the extraction prompt shared by all providers
   alembic/              database migrations (SQLite and PostgreSQL)
   tests/
 frontend/src/           the lab technician's interface (forms table, review screen, insights dashboard, login)
 ```
+
+Dependencies point inwards: `api → services → domain`; `services`, `db` and `integrations` depend on `domain`, never the
+other way round. Only `container.py` creates components, so tests can replace any outside service with a fake.
 
 ## Data and security
 

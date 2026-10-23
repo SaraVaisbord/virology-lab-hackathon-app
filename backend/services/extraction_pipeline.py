@@ -85,7 +85,7 @@ class ExtractionPipeline:
 
     def _ocr(self, views: PageViews, barcodes: list[dict[str, Any]], page: int | None) -> dict[str, Any]:
         """Local OCR extraction (labels → values). Returns {"status", "candidates", "labels", "unassigned_numbers"}."""
-        empty = {"candidates": [], "labels": [], "unassigned_numbers": [], "items": []}
+        empty: dict[str, list] = {"candidates": [], "labels": [], "unassigned_numbers": [], "items": []}
         if not self._local.ocr.is_available():
             return {"status": "unavailable", "reason": OCR_UNAVAILABLE_REASON, **empty}
         try:

@@ -48,10 +48,10 @@ def _to_strict_json_schema(node: dict[str, Any]) -> dict[str, Any]:
         return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
     if kind == "array":
         return {"type": "array", "items": _to_strict_json_schema(node["items"])}
-    converted: dict[str, Any] = {"type": kind}
+    leaf: dict[str, Any] = {"type": kind}
     if "enum" in node:
-        converted["enum"] = node["enum"]
-    return converted
+        leaf["enum"] = node["enum"]
+    return leaf
 
 
 @lru_cache(maxsize=1)

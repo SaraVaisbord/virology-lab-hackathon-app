@@ -18,30 +18,39 @@ files on local disk under `backend/data`.
 | Concern | Lives in | Consumed by |
 |---|---|---|
 | Settings (paths, limits, Gemini model/timeout, worker count, page size, poll interval) | `backend/config.py` (+ `.env`) | backend; UI-relevant ones via `GET /meta` |
-| Field names, statuses, Hebrew labels, review reasons, export modes, upload types | `backend/db/constants.py` | backend, DB constraints, Excel export, UI via `GET /meta` |
-| Gemini prompt | `backend/prompts/extraction_prompt.md` | `ai_extractor.py` |
-| Gemini response schema | generated from `FIELDS` in `ai_extractor.py` | Gemini structured output |
+| Field names, statuses, Hebrew labels, review reasons, export modes, upload types | `backend/domain/vocabulary.py` | backend, DB constraints, Excel export, UI via `GET /meta` |
+| Extraction prompt | `backend/prompts/extraction_prompt.md` | every LLM provider (`integrations/llm/prompt.py`) |
+| LLM response schema | generated from `FIELDS` in `integrations/llm/schema.py` | structured output of every provider |
 
-The frontend has no copies of labels/statuses: `MetaProvider` loads `/meta` once and components use `useMeta()`.
+The frontend has no copies of labels: `MetaProvider` loads `/meta` once and components use `useMeta()`; the few status and source keys the UI acts on are in `frontend/src/lib/domainKeys.js`.
 
 ## 3. Repository structure
 
 ### Backend (`backend/`)
 
-- `main.py` — app, CORS, routers, starts/stops the extraction queue (lifespan)
-- `config.py` — all settings
-- `api/` — `forms.py` (list/summary/export/get/image/confirm/retry), `uploads.py`, `meta.py`
+Dependencies point inwards — `api → services → domain`; `db` and `integrations` depend on `domain` only. Only the
+composition root (`container.py`) creates components; everything else receives what it needs.
+
+- `main.py` — entry point (`uvicorn main:app`); `api/app.py` — `create_app()`: CORS, routers, login check, queue lifetime
+- `config.py` — `Settings` (immutable) read once by `load_settings()` from the environment / `.env`
+- `container.py` — composition root: builds the database, repositories, integrations and services from the settings
+- `api/` — `forms.py` (list/summary/export/get/image/confirm/retry/delete), `uploads.py`, `meta.py`, `auth.py`,
+  `insights.py`; `dependencies.py` hands the container's components to the routes
 - `services/`
-  - `upload_service.py` — validate (magic bytes), hash/dedupe, store, split into page PNGs, create forms
-  - `extraction_queue.py` — worker threads, atomic claim, 429 pause/resume, user-facing error messages
-  - `extraction_service.py` — per-page pipeline and field rules (`build_fields`)
-  - `export_service.py` — Excel workbook (same filters as the table)
-  - `forms_service.py` — safe resolution of stored image paths
-- `ai_extractor.py` — Gemini client (single instance, timeout, structured output, retries)
-- `barcode_reader.py` — zbar scanning, coordinates normalized to the image (also a CLI)
-- `validators.py` — Israeli ID checksum, date parsing
-- `db/` — `constants.py`, `models.py`, `queries.py` (all SQL incl. paging/filtering/sorting), `session.py`, `seed_senders.py`
-- `alembic/` — migrations · `tests/` — pytest suite (`conftest.py` gives an isolated DB per test)
+  - `upload_service.py` — validate (magic bytes), hash/dedupe, store, split into upright page PNGs, create forms
+  - `extraction_pipeline.py` — per-page pipeline: preprocess → barcodes → OCR → LLM → merge; user-facing error messages
+  - `extraction_queue.py` — worker threads, atomic claim, quota pause/resume
+  - `review_service.py` — the lab worker's actions (confirm / correct / add / delete a value, delete a form, retry)
+  - `export_service.py` — Excel workbook (same filters as the table) · `insights_service.py` · `auth_service.py`
+- `domain/` — `vocabulary.py` (fields, statuses, Hebrew labels), `validators.py` (ID checksum, dates, change
+  classification), `verification.py` (field rules, `build_fields`), `review_rules.py`
+- `db/` — `models.py`, `session.py` (`Database`), `serialization.py`, `repositories/` (forms, review, listing,
+  correction history, senders), `seed_senders.py`
+- `integrations/` — `llm/` (Gemini, Claude, OpenAI behind one `LlmProvider` protocol, `LlmRouter` failover),
+  `ocr/` (`OcrEngine` protocol, Tesseract, label → value extraction), `imaging/` (preprocessing, zbar), `storage.py`
+  (local / S3), `mailer.py` (SMTP)
+- `experimental/` — handwritten digits (measured, not wired in) · `scripts/` — command-line tools
+- `alembic/` — migrations · `tests/` — pytest suite (`conftest.py` gives isolated settings, database and components per test)
 
 ### Frontend (`frontend/src/`)
 
