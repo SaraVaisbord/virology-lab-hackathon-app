@@ -6,7 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import ModuleType
 
-from db import queries
+from db import session as db_session
+from db.repositories import CorrectionHistory, FormListing, FormRepository, ReviewRepository, SenderRepository
 from domain.verification import VerificationRules
 from integrations.imaging.barcode import scan_pil_image
 from integrations.llm.base import LlmProvider
@@ -64,6 +65,11 @@ def build_file_storage(cfg: ModuleType) -> Storage:
 @dataclass
 class Container:
     worker_enabled: bool
+    forms: FormRepository
+    review: ReviewRepository
+    listing: FormListing
+    history: CorrectionHistory
+    senders: SenderRepository
     storage: Storage
     ocr: OcrEngine
     llm: LlmRouter
@@ -74,12 +80,16 @@ class Container:
 def build_container(cfg: ModuleType, *, llm_providers: dict[str, LlmProvider] | None = None, ocr: OcrEngine | None = None,
                     storage: Storage | None = None, scan_barcodes=scan_pil_image) -> Container:
     """Every component built from `cfg`; tests replace the outside world (LLM providers, OCR, storage, zbar)."""
+    sessions = db_session.SessionLocal
+    forms, senders = FormRepository(sessions), SenderRepository(sessions)
     storage = storage or build_file_storage(cfg)
     ocr = ocr or build_ocr(cfg)
     llm = LlmRouter(llm_providers or build_llm_providers(cfg), cfg.LLM_PROVIDERS)
     pipeline = ExtractionPipeline(
-        queries, storage, llm, LocalExtractor(ocr, cfg.RECEIVED_DATE_MAX_AGE_DAYS), scan_barcodes,
+        forms, senders, storage, llm, LocalExtractor(ocr, cfg.RECEIVED_DATE_MAX_AGE_DAYS), scan_barcodes,
         verification_rules(cfg), page_render_dpi=cfg.PAGE_RENDER_DPI, llm_enabled=cfg.LLM_ENABLED,
     )
-    queue = ExtractionQueue(pipeline, queries, cfg.WORKER_CONCURRENCY, cfg.WORKER_IDLE_POLL_SECONDS)
-    return Container(worker_enabled=cfg.WORKER_ENABLED, storage=storage, ocr=ocr, llm=llm, pipeline=pipeline, queue=queue)
+    queue = ExtractionQueue(pipeline, forms, cfg.WORKER_CONCURRENCY, cfg.WORKER_IDLE_POLL_SECONDS)
+    return Container(worker_enabled=cfg.WORKER_ENABLED, forms=forms, review=ReviewRepository(sessions), listing=FormListing(sessions),
+                     history=CorrectionHistory(sessions), senders=senders, storage=storage, ocr=ocr, llm=llm,
+                     pipeline=pipeline, queue=queue)

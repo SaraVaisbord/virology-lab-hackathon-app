@@ -13,6 +13,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
+from db.repositories import FormRepository
 from integrations.llm.errors import ModelsUnavailableError
 from services.extraction_pipeline import ExtractionPipeline, user_facing_error
 
@@ -20,11 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 class ExtractionQueue:
-    """store: claim_next_form, requeue_stale_processing, return_to_queue, set_form_status."""
-
-    def __init__(self, pipeline: ExtractionPipeline, store, concurrency: int, idle_poll_seconds: float) -> None:
+    def __init__(self, pipeline: ExtractionPipeline, forms: FormRepository, concurrency: int, idle_poll_seconds: float) -> None:
         self._pipeline = pipeline
-        self._store = store
+        self._forms = forms
         self._concurrency = max(1, concurrency)
         self._idle_poll_seconds = idle_poll_seconds
         self._wake = threading.Event()
@@ -37,7 +36,7 @@ class ExtractionQueue:
     def start(self) -> None:
         if self._threads:
             return
-        requeued = self._store.requeue_stale_processing()
+        requeued = self._forms.requeue_stale_processing()
         if requeued:
             logger.info("Re-queued %d forms left in 'processing'", requeued)
         self._stop.clear()
@@ -85,7 +84,7 @@ class ExtractionQueue:
             if wait:
                 self._stop.wait(min(wait, self._idle_poll_seconds))
                 continue
-            form = self._store.claim_next_form()
+            form = self._forms.claim_next_form()
             if form is None:
                 self._wake.wait(self._idle_poll_seconds)
                 self._wake.clear()
@@ -98,8 +97,8 @@ class ExtractionQueue:
             logger.info("Form %s extracted", form["id"])
         except ModelsUnavailableError as exc:
             logger.warning("All LLM providers resting (%s) — pausing queue for %.0fs", exc.reason, exc.retry_after_seconds)
-            self._store.return_to_queue(form["id"])
+            self._forms.return_to_queue(form["id"])
             self.pause(exc.retry_after_seconds, exc.reason)
         except Exception as exc:
             logger.exception("Extraction failed for form %s", form["id"])
-            self._store.set_form_status(form["id"], "failed", error=user_facing_error(exc))
+            self._forms.set_form_status(form["id"], "failed", error=user_facing_error(exc))

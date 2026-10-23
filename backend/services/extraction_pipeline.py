@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
+from db.repositories import FormRepository, SenderRepository
 from domain.verification import VerificationRules, build_fields, form_type_of, sample_is_commitment_on
 from domain.vocabulary import EXTRACTION_ERRORS, OCR_UNAVAILABLE_REASON
 from integrations.imaging.image_io import png_bytes, read_image
@@ -43,13 +44,14 @@ def user_facing_error(exc: Exception) -> str:
 
 
 class ExtractionPipeline:
-    """store: where forms and their results are kept (get_form, list_senders, save_source_results, save_extraction,
-    set_form_status); files: the page images; llm: the providers, with failover; local: the OCR extraction;
-    scan_barcodes: zbar on one image; llm_enabled: whether pages are sent to an LLM by default."""
+    """forms: the forms and their results; senders: the known senders; files: the page images; llm: the providers,
+    with failover; local: the OCR extraction; scan_barcodes: zbar on one image; llm_enabled: whether pages are sent
+    to an LLM by default."""
 
-    def __init__(self, store, files: Storage, llm: LlmRouter, local: LocalExtractor, scan_barcodes: BarcodeScanner,
-                 rules: VerificationRules, page_render_dpi: int, llm_enabled: bool) -> None:
-        self._store = store
+    def __init__(self, forms: FormRepository, senders: SenderRepository, files: Storage, llm: LlmRouter, local: LocalExtractor,
+                 scan_barcodes: BarcodeScanner, rules: VerificationRules, page_render_dpi: int, llm_enabled: bool) -> None:
+        self._forms = forms
+        self._senders = senders
         self._files = files
         self._llm = llm
         self._local = local
@@ -90,7 +92,7 @@ class ExtractionPipeline:
         return {"status": "ok", "page": page, **result, "items": result["candidates"]}
 
     def _known_senders(self) -> list[str]:
-        return [name for name, _kind in self._store.list_senders()]
+        return self._senders.names()
 
     def _fields(self, page: int | None, llm_result, barcodes, ocr_result, known_senders) -> tuple[list[dict[str, Any]], str | None]:
         form_type = form_type_of(ocr_result, llm_result)
@@ -122,49 +124,49 @@ class ExtractionPipeline:
 
     def _extract_sources(self, form_id: int, page: int | None, views: PageViews, image_path: Path, provider: str | None,
                          use_llm: bool) -> None:
-        store = self._store
+        forms = self._forms
         barcode_result = self._barcode_scan(views, page)
         ocr_result = self._ocr(views, barcode_result["items"], page)
         errors = {source: result["error"] for source, result in (("barcode", barcode_result), ("ocr", ocr_result)) if result["status"] == "error"}
-        store.save_source_results(form_id, barcode_result=barcode_result, ocr_result=ocr_result, source_errors=errors or None)
+        forms.save_source_results(form_id, barcode_result=barcode_result, ocr_result=ocr_result, source_errors=errors or None)
 
         known_senders = self._known_senders()
         # Without a new LLM call, an answer already stored for this page (from an earlier run) is still merged.
-        llm_result = (store.get_form(form_id, with_sources=True) or {}).get("sources", {}).get("llm_result")
+        llm_result = (forms.get_form(form_id, with_sources=True) or {}).get("sources", {}).get("llm_result")
         if use_llm:
             try:
                 answer = self._llm.extract_from_image(image_path, known_senders, providers=[provider] if provider else None)
                 llm_result = drop_irrelevant_numbers(answer)
             except Exception as exc:
-                store.save_source_results(form_id, source_errors={**errors, "llm": user_facing_error(exc)})
+                forms.save_source_results(form_id, source_errors={**errors, "llm": user_facing_error(exc)})
                 raise
-            store.save_source_results(form_id, llm_result=llm_result)
+            forms.save_source_results(form_id, llm_result=llm_result)
 
         fields, form_type = self._fields(page, llm_result, barcode_result["items"], ocr_result, known_senders)
-        store.save_extraction(form_id, fields, form_type=form_type)
+        forms.save_extraction(form_id, fields, form_type=form_type)
 
     def reverify(self, form_id: int) -> bool:
         """Re-run the verification rules on the stored source results (no new LLM call). False if nothing is stored."""
-        form = self._store.get_form(form_id, with_sources=True)
+        form = self._forms.get_form(form_id, with_sources=True)
         sources = (form or {}).get("sources") or {}
         if not (sources.get("llm_result") or sources.get("ocr_result")):
             return False
         barcodes = (sources.get("barcode_result") or {}).get("items", [])
         fields, form_type = self._fields(form["page_number"], sources.get("llm_result"), barcodes, sources.get("ocr_result"),
                                          self._known_senders())
-        self._store.save_extraction(form_id, fields, form_type=form_type)
+        self._forms.save_extraction(form_id, fields, form_type=form_type)
         return True
 
     def extract_one(self, form_id: int, provider: str | None = None, use_llm: bool | None = None) -> str:
         """One-off extraction of a single form outside the queue (optionally with one provider). Returns its status."""
-        store = self._store
-        form = store.get_form(form_id)
+        forms = self._forms
+        form = forms.get_form(form_id)
         if form is None:
             raise ValueError(f"Form {form_id} not found")
-        store.set_form_status(form_id, "processing")
+        forms.set_form_status(form_id, "processing")
         try:
             self.extract(form, provider=provider, use_llm=use_llm)
         except Exception as exc:
             logger.exception("One-off extraction failed for form %s", form_id)
-            store.set_form_status(form_id, "failed", error=user_facing_error(exc))
-        return store.get_form(form_id)["status"]
+            forms.set_form_status(form_id, "failed", error=user_facing_error(exc))
+        return forms.get_form(form_id)["status"]

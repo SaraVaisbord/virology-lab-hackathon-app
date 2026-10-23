@@ -240,17 +240,18 @@ def test_events_hold_no_field_values(app_env):
 def test_event_failure_rolls_back_the_correction(app_env, monkeypatch, action):
     """A correction is never saved without its event: if the event can't be stored, the field stays as it was."""
     from db import queries
+    from db.repositories import review
 
     form_id, ids = _form_with(queries, _MISREAD)
     before = queries.get_form(form_id)
-    real = queries._correction_event
+    real = review._correction_event
 
     def broken(*args, **kwargs):
         event = real(*args, **kwargs)
         event.action = "not-an-action"  # rejected by the table's check constraint at flush
         return event
 
-    monkeypatch.setattr(queries, "_correction_event", broken)
+    monkeypatch.setattr(review, "_correction_event", broken)
     with pytest.raises(IntegrityError):
         if action == "confirm":
             queries.confirm_field(form_id, ids["commitment_number"], corrected_value="47381")

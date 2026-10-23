@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from domain.vocabulary import EXTRACTION_ERRORS, FIELDS, OCR_UNAVAILABLE_REASON, REASONS
+from domain.vocabulary import EXTRACTION_ERRORS, FIELDS, REASONS
 from domain.verification import VerificationRules, match_sender
 from integrations.llm.errors import ExtractionError, MissingApiKeyError, ModelsUnavailableError
 from domain.verification import build_fields as _build_fields
@@ -247,7 +247,8 @@ def make_pipeline(app_env, fake_local_sources):
     """make_pipeline(gemini=..., openai=..., llm_enabled=False) → an ExtractionPipeline over the test DB and data
     folder, with the given LLM providers (the others unconfigured) and the canned local sources."""
     import config
-    from db import queries
+    from db import session
+    from db.repositories import FormRepository, SenderRepository
     from integrations.llm.router import LlmRouter
     from integrations.storage import LocalStorage
     from services.extraction_pipeline import ExtractionPipeline
@@ -272,7 +273,8 @@ def make_pipeline(app_env, fake_local_sources):
     def make(llm_enabled=False, **providers):
         known = {name: providers.get(name) or _unconfigured() for name in ("gemini", "claude", "openai")}
         router = LlmRouter(known, ["gemini", "claude"])
-        return ExtractionPipeline(queries, LocalStorage(config.DATA_DIR), router, Local(), scan, RULES,
+        sessions = session.SessionLocal
+        return ExtractionPipeline(FormRepository(sessions), SenderRepository(sessions), LocalStorage(config.DATA_DIR), router, Local(), scan, RULES,
                                   page_render_dpi=config.PAGE_RENDER_DPI, llm_enabled=llm_enabled)
     return make
 
@@ -326,11 +328,13 @@ def test_llm_failure_keeps_barcode_and_ocr_results(make_pipeline, fake_local_sou
     """Spec 6."""
     from db import queries
     from services import upload_service
+    from db import session
+    from db.repositories import FormRepository
     from services.extraction_queue import ExtractionQueue
 
     pipeline = make_pipeline(gemini=_FakeProvider(error=ExtractionError("Gemini API error: boom")), llm_enabled=True)
     form_id, form = _uploaded_form(queries, upload_service)
-    ExtractionQueue(pipeline, queries, 1, 1).process(form)
+    ExtractionQueue(pipeline, FormRepository(session.SessionLocal), 1, 1).process(form)
 
     stored = queries.get_form(form_id, with_sources=True)
     assert stored["status"] == "failed" and stored["error"] == EXTRACTION_ERRORS["model"]
@@ -359,12 +363,14 @@ def test_barcode_failure_keeps_other_results(make_pipeline, fake_local_sources):
 def test_quota_error_requeues_form_and_pauses_queue(make_pipeline, fake_local_sources):
     from db import queries
     from services import upload_service
+    from db import session
+    from db.repositories import FormRepository
     from services.extraction_queue import ExtractionQueue
 
     quota = ModelsUnavailableError("429", retry_after_seconds=120, reason="quota")
     pipeline = make_pipeline(gemini=_FakeProvider(error=quota), llm_enabled=True)
     form_id, form = _uploaded_form(queries, upload_service)
-    queue = ExtractionQueue(pipeline, queries, 1, 1)
+    queue = ExtractionQueue(pipeline, FormRepository(session.SessionLocal), 1, 1)
     queue.process(form)
 
     assert queries.get_form(form_id)["status"] == "uploaded"
