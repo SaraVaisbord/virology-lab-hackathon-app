@@ -1,0 +1,136 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "id_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": null,
+  "box_source": null,
+  "confidence": "high",
+  "evidence": {
+   "agreement": "agree",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": "מרכזי",
+    "label_supports": true,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": null
+   },
+   "barcode_candidates": [],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": "מרכזי",
+    "reason": null,
+    "value": "777777"
+   },
+   "ocr": {
+    "confidence": null,
+    "distance": null,
+    "label": null,
+    "raw": "777777",
+    "source": "ocr"
+   },
+   "ocr_candidates": [
+    "777777"
+   ],
+   "sources": [
+    "llm",
+    "ocr"
+   ]
+  },
+  "field_name": "central_number",
+  "llm_value": "777777",
+  "ocr_value": "777777",
+  "page": 1,
+  "reason": "הערך נקרא בכמה מקורות, אך השיוך לשדה מבוסס על ה-AI בלבד – לא נמצאה תווית מתאימה ליד הערך ב-OCR",
+  "status": "unverified",
+  "value": "777777"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "commitment_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "received_date",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "sender",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ }
+]

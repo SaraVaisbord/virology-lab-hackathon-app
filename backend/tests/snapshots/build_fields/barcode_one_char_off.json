@@ -1,0 +1,139 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "id_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "central_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": null,
+  "box_source": null,
+  "confidence": "high",
+  "evidence": {
+   "agreement": "conflict",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": null
+   },
+   "barcode_candidates": [
+    {
+     "box": {
+      "height": 0.03,
+      "width": 0.05,
+      "x": 0.1,
+      "y": 0.2
+     },
+     "data": "555123",
+     "match": "near",
+     "type": "CODE128"
+    }
+   ],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": null,
+    "reason": null,
+    "value": "555124"
+   },
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": [
+    "llm"
+   ]
+  },
+  "field_name": "commitment_number",
+  "llm_value": "555124",
+  "ocr_value": null,
+  "page": 1,
+  "reason": "ברקוד בעמוד שונה בתו אחד מקריאת ה-AI: 555123",
+  "status": "conflict",
+  "value": "555124"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "received_date",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "sender",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ }
+]

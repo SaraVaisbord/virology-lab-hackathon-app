@@ -1,0 +1,167 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": null,
+  "box_source": null,
+  "confidence": "high",
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": null
+   },
+   "barcode_candidates": [],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": null,
+    "reason": null,
+    "value": "123456789"
+   },
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": [
+    "llm"
+   ]
+  },
+  "field_name": "id_number",
+  "llm_value": "123456789",
+  "ocr_value": null,
+  "page": 1,
+  "reason": "ספרת הביקורת של מספר ת\"ז אינה תקינה",
+  "status": "uncertain",
+  "value": "123456789"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "central_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "commitment_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": null,
+  "box_source": null,
+  "confidence": "high",
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": null
+   },
+   "barcode_candidates": [],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": null,
+    "reason": null,
+    "value": "01/02/2001"
+   },
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": [
+    "llm"
+   ]
+  },
+  "field_name": "received_date",
+  "llm_value": "01/02/2001",
+  "ocr_value": null,
+  "page": 1,
+  "reason": "התאריך רחוק מהתאריך הנוכחי או עתידי – ייתכן שגיאת קריאה בספרות",
+  "status": "uncertain",
+  "value": "01/02/2001"
+ },
+ {
+  "barcode_value": null,
+  "box_source": null,
+  "confidence": "high",
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": null
+   },
+   "barcode_candidates": [],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": null,
+    "reason": null,
+    "value": "מוסד לא מוכר"
+   },
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": [
+    "llm"
+   ]
+  },
+  "field_name": "sender",
+  "llm_value": "מוסד לא מוכר",
+  "ocr_value": null,
+  "page": 1,
+  "reason": "הגורם השולח לא נמצא ברשימת השולחים המוכרים",
+  "status": "uncertain",
+  "value": "מוסד לא מוכר"
+ }
+]

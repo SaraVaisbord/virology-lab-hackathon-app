@@ -1,0 +1,197 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "id_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": "947768",
+  "box_source": "barcode",
+  "confidence": "high",
+  "evidence": {
+   "agreement": "agree",
+   "assignment": {
+    "also_claimed_by": [
+     "commitment_number"
+    ],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": "מרכזי"
+   },
+   "barcode_candidates": [
+    {
+     "box": {
+      "height": 0.03,
+      "width": 0.05,
+      "x": 0.1,
+      "y": 0.2
+     },
+     "data": "947768",
+     "match": "exact",
+     "type": "CODE128"
+    }
+   ],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": null,
+    "reason": null,
+    "value": "947768"
+   },
+   "ocr": {
+    "anchor": null,
+    "confidence": 90.0,
+    "distance": 0.05,
+    "label": "מרכזי",
+    "raw": "947768",
+    "source": "ocr"
+   },
+   "ocr_candidates": [
+    "947768"
+   ],
+   "sources": [
+    "barcode",
+    "llm",
+    "ocr"
+   ]
+  },
+  "field_name": "central_number",
+  "height": 0.03,
+  "llm_value": "947768",
+  "ocr_value": "947768",
+  "page": 1,
+  "reason": "אותו מספר זוהה גם כמספר התחייבות – לא ברור לאיזה שדה הוא שייך",
+  "status": "conflict",
+  "value": "947768",
+  "width": 0.05,
+  "x": 0.1,
+  "y": 0.2
+ },
+ {
+  "barcode_value": "947768",
+  "box_source": "barcode",
+  "confidence": "high",
+  "evidence": {
+   "agreement": "agree",
+   "assignment": {
+    "also_claimed_by": [
+     "central_number"
+    ],
+    "label": "מרכזי",
+    "label_supports": false,
+    "ocr_assigned_elsewhere": [
+     "central_number"
+    ],
+    "ocr_label": null
+   },
+   "barcode_candidates": [
+    {
+     "box": {
+      "height": 0.03,
+      "width": 0.05,
+      "x": 0.1,
+      "y": 0.2
+     },
+     "data": "947768",
+     "match": "exact",
+     "type": "CODE128"
+    }
+   ],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": "מרכזי",
+    "reason": null,
+    "value": "947768"
+   },
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": [
+    "barcode",
+    "llm"
+   ]
+  },
+  "field_name": "commitment_number",
+  "height": 0.03,
+  "llm_value": "947768",
+  "ocr_value": null,
+  "page": 1,
+  "reason": "התווית ליד הערך ('מרכזי') מתאימה למספר מרכזי · אותו מספר זוהה גם כמספר מרכזי – לא ברור לאיזה שדה הוא שייך · התווית שזוהתה ב-OCR ליד אותו מספר מתאימה למספר מרכזי",
+  "status": "conflict",
+  "value": "947768",
+  "width": 0.05,
+  "x": 0.1,
+  "y": 0.2
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "received_date",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "sender",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ }
+]

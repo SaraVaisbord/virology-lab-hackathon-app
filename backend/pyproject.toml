@@ -1,0 +1,24 @@
+# Tool settings only (the server is not packaged). Dev tools: pip install -r requirements-dev.txt
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"  # the server image (Dockerfile)
+line-length = 130
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+# pyflakes + the error-level pycodestyle rules (ruff's defaults, written out) and import order.
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "config", "db", "domain", "integrations", "main", "schemas", "services", "experimental", "scripts"]
+
+# Lenient on purpose: shows problems, blocks nothing (no strict mode, untyped code is not checked).
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = false
+exclude = ["alembic/versions/"]

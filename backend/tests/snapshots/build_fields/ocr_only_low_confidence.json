@@ -1,0 +1,159 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "id_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": null,
+  "box_source": "ocr",
+  "confidence": "low",
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": "מרכזי"
+   },
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": {
+    "anchor": null,
+    "confidence": 40.0,
+    "distance": 0.05,
+    "label": "מרכזי",
+    "raw": "123456",
+    "source": "ocr"
+   },
+   "ocr_candidates": [
+    "123456"
+   ],
+   "sources": [
+    "ocr"
+   ]
+  },
+  "field_name": "central_number",
+  "height": 0.02,
+  "llm_value": null,
+  "ocr_value": "123456",
+  "page": 1,
+  "reason": "רמת ביטחון נמוכה בזיהוי הערך",
+  "status": "uncertain",
+  "value": "123456",
+  "width": 0.1,
+  "x": 0.4,
+  "y": 0.3
+ },
+ {
+  "barcode_value": "654321",
+  "box_source": "barcode",
+  "confidence": "high",
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": "דרישה"
+   },
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": {
+    "anchor": null,
+    "confidence": 90.0,
+    "distance": 0.05,
+    "label": "דרישה",
+    "raw": "654321",
+    "source": "barcode"
+   },
+   "ocr_candidates": [],
+   "sources": [
+    "barcode"
+   ]
+  },
+  "field_name": "commitment_number",
+  "height": 0.02,
+  "llm_value": null,
+  "ocr_value": null,
+  "page": 1,
+  "reason": "הערך נמצא ליד התווית בסריקה המקומית בלבד – אין מקור נוסף שמאשר את הקריאה",
+  "status": "unverified",
+  "value": "654321",
+  "width": 0.1,
+  "x": 0.4,
+  "y": 0.3
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "received_date",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "sender",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ }
+]
