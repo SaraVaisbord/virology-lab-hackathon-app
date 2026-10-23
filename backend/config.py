@@ -159,7 +159,7 @@ GEMINI_IMAGE_JPEG_QUALITY = _env_int("GEMINI_IMAGE_JPEG_QUALITY", 80)
 
 # ── LLM providers: which ones read the page, in order ────────────────────────
 # The first provider that answers is used; one that is out of quota, overloaded or not configured hands the page to
-# the next (services/llm_router.py). Known providers: gemini, claude, openai.
+# the next (integrations/llm/router.py). Known providers: gemini, claude, openai.
 LLM_PROVIDERS = _env_list("LLM_PROVIDERS") or ["gemini", "claude"]
 
 # ── Claude (Anthropic) ───────────────────────────────────────────────────────

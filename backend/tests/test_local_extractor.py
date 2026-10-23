@@ -7,10 +7,11 @@ from datetime import date, timedelta
 import numpy as np
 import pytest
 
-import local_extractor
-from local_extractor import DEFAULT_SETTINGS as S, _matches, normalize_date
-from ocr_reader import OcrWord
-from preprocessing import PageViews
+from integrations.imaging.preprocessing import PageViews
+from integrations.ocr import local_extractor
+from integrations.ocr.base import OcrWord
+from integrations.ocr.local_extractor import DEFAULT_SETTINGS as S
+from integrations.ocr.local_extractor import LocalExtractor, _matches, normalize_date
 
 LINE_H = 0.015
 
@@ -25,14 +26,21 @@ def views():
     return PageViews(normalized=blank, print_binary=blank[..., 0], handwriting=blank[..., 0], stamps=blank[..., 0], lines=blank[..., 0])
 
 
-@pytest.fixture(autouse=True)
-def _no_real_ocr(monkeypatch):
-    monkeypatch.setattr(local_extractor, "_targeted_tokens", lambda views, label, settings: [])
-    monkeypatch.setattr(local_extractor, "_sticker_words", lambda views, barcodes, settings: [])
+class _NoOcr:
+    """The page words are given to each test; re-reads (next to a label, around a barcode) find nothing."""
+
+    def is_available(self):
+        return True
+
+    def read_words(self, image, psm=11, languages=None, extra_config=None):
+        return []
+
+    def detect_rotation(self, image):
+        return 0, 0.0
 
 
 def _extract(views, words, barcodes=None):
-    result = local_extractor.extract(views, barcodes or [], words=words)
+    result = LocalExtractor(_NoOcr(), received_date_max_age_days=365).extract(views, barcodes or [], words=words)
     return {(c.field, c.value) for c in result.candidates if c.rank == 0}, result
 
 

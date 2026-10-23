@@ -61,12 +61,21 @@ def app_env(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def client(app_env):
+def container(app_env):
+    """The application's components, built from the test configuration (worker not started)."""
+    import config
+    from container import build_container
+
+    return build_container(config)
+
+
+@pytest.fixture
+def client(container):
     from fastapi.testclient import TestClient
 
     import main
 
-    return TestClient(main.app)
+    return TestClient(main.create_app(container))
 
 
 class DummyUpload:

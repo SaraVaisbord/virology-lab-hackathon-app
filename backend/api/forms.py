@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 import config
+from api.dependencies import get_queue
 from db import queries
 from domain.vocabulary import EXPORT_MODE_LABELS
 from schemas.forms import AddFieldRequest, ConfirmFieldRequest, FormDetailResponse, FormsPage, FormsSummary
 from services.export_service import build_forms_workbook
-from services.extraction_queue import extraction_queue
+from services.extraction_queue import ExtractionQueue
 from storage import UPLOADS_PREFIX, get_storage
 
 router = APIRouter(prefix="/forms", tags=["forms"])
@@ -52,8 +53,8 @@ def list_forms(
 
 
 @router.get("/summary", response_model=FormsSummary)
-def forms_summary():
-    return {**queries.forms_summary(), "queue": extraction_queue.state()}
+def forms_summary(queue: ExtractionQueue = Depends(get_queue)):
+    return {**queries.forms_summary(), "queue": queue.state()}
 
 
 @router.get("/export")
@@ -148,10 +149,10 @@ def delete_form(form_id: int):
 
 
 @router.post("/{form_id}/retry", response_model=FormDetailResponse)
-def retry_extraction(form_id: int):
+def retry_extraction(form_id: int, queue: ExtractionQueue = Depends(get_queue)):
     try:
         queries.requeue_form(form_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    extraction_queue.notify()
+    queue.notify()
     return queries.get_form(form_id, with_sources=True)

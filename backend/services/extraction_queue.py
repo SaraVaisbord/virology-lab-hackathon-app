@@ -2,8 +2,8 @@
 
 The queue itself is the `forms` table (status 'uploaded'); worker threads atomically claim forms one by one,
 so the queue survives restarts and several workers never process the same form.
-When Gemini reports a quota/rate limit, the form goes back to the queue and all workers pause until the
-time Google asked us to wait.
+When every LLM provider reports a quota/rate limit, the form goes back to the queue and all workers pause until the
+time the provider asked us to wait.
 """
 
 from __future__ import annotations
@@ -13,16 +13,18 @@ import threading
 import time
 from datetime import datetime, timezone
 
-import config
-from db import queries
 from integrations.llm.errors import ModelsUnavailableError
-from services.extraction_service import extract_for_form, user_facing_error
+from services.extraction_pipeline import ExtractionPipeline, user_facing_error
 
 logger = logging.getLogger(__name__)
 
 
 class ExtractionQueue:
-    def __init__(self, concurrency: int, idle_poll_seconds: float) -> None:
+    """store: claim_next_form, requeue_stale_processing, return_to_queue, set_form_status."""
+
+    def __init__(self, pipeline: ExtractionPipeline, store, concurrency: int, idle_poll_seconds: float) -> None:
+        self._pipeline = pipeline
+        self._store = store
         self._concurrency = max(1, concurrency)
         self._idle_poll_seconds = idle_poll_seconds
         self._wake = threading.Event()
@@ -35,7 +37,7 @@ class ExtractionQueue:
     def start(self) -> None:
         if self._threads:
             return
-        requeued = queries.requeue_stale_processing()
+        requeued = self._store.requeue_stale_processing()
         if requeued:
             logger.info("Re-queued %d forms left in 'processing'", requeued)
         self._stop.clear()
@@ -83,7 +85,7 @@ class ExtractionQueue:
             if wait:
                 self._stop.wait(min(wait, self._idle_poll_seconds))
                 continue
-            form = queries.claim_next_form()
+            form = self._store.claim_next_form()
             if form is None:
                 self._wake.wait(self._idle_poll_seconds)
                 self._wake.clear()
@@ -92,15 +94,12 @@ class ExtractionQueue:
 
     def process(self, form: dict) -> None:
         try:
-            extract_for_form(form)
+            self._pipeline.extract(form)
             logger.info("Form %s extracted", form["id"])
         except ModelsUnavailableError as exc:
             logger.warning("All LLM providers resting (%s) — pausing queue for %.0fs", exc.reason, exc.retry_after_seconds)
-            queries.return_to_queue(form["id"])
+            self._store.return_to_queue(form["id"])
             self.pause(exc.retry_after_seconds, exc.reason)
         except Exception as exc:
             logger.exception("Extraction failed for form %s", form["id"])
-            queries.set_form_status(form["id"], "failed", error=user_facing_error(exc))
-
-
-extraction_queue = ExtractionQueue(config.WORKER_CONCURRENCY, config.WORKER_IDLE_POLL_SECONDS)
+            self._store.set_form_status(form["id"], "failed", error=user_facing_error(exc))

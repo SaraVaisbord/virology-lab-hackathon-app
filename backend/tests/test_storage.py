@@ -6,8 +6,8 @@ import io
 
 import pytest
 
-import storage
-from storage import LocalStorage, S3Storage, page_key
+from integrations import storage
+from integrations.storage import LocalStorage, S3Storage, page_key
 
 
 def test_local_storage_round_trip_and_prefix_delete(tmp_path):
@@ -65,8 +65,7 @@ class _FakeS3:
 
 def test_s3_storage_uses_the_bucket_and_prefix(monkeypatch):
     fake = _FakeS3()
-    monkeypatch.setattr(storage, "_s3_client", lambda: fake)
-    files = S3Storage("lab-bucket", prefix="forms")
+    files = S3Storage("lab-bucket", prefix="forms", new_client=lambda: fake)
     files.put(page_key("abc", 1), b"page", "image/png")
     assert fake.objects[("lab-bucket", "forms/pages_img/abc_p1.png")] == (b"page", "image/png")
     assert files.get("pages_img/abc_p1.png") == b"page" and files.get("pages_img/none.png") is None
@@ -83,7 +82,7 @@ def test_upload_and_image_endpoint_go_through_the_configured_storage(client, mon
     from tests.conftest import png_bytes
 
     fake = _FakeS3()
-    monkeypatch.setattr(storage, "_s3_client", lambda: fake)
+    monkeypatch.setattr(storage, "_boto3_client", lambda region: fake)
     monkeypatch.setattr(config, "STORAGE_BACKEND", "s3")
     monkeypatch.setattr(config, "S3_BUCKET", "lab-bucket")
     monkeypatch.setattr(config, "S3_PREFIX", "")

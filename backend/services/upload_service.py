@@ -13,7 +13,8 @@ from PIL import Image, ImageOps
 
 import config
 from domain.vocabulary import UPLOAD_TYPES
-from preprocessing import straighten
+from integrations.imaging.preprocessing import straighten
+from ocr_reader import default_engine
 from db.queries import add_form, delete_forms_by_hash, find_forms_by_hash
 from storage import PAGES_PREFIX, UPLOADS_PREFIX, get_storage, page_key, upload_key
 
@@ -42,7 +43,7 @@ def _normalize_page(image: Image.Image) -> Image.Image:
     always straight, from the moment it is uploaded (not only after extraction)."""
     image = ImageOps.exif_transpose(image).convert("RGB")
     image.thumbnail((config.PAGE_MAX_SIDE_PX, config.PAGE_MAX_SIDE_PX), Image.Resampling.LANCZOS)
-    upright, _rotation, _skew = straighten(cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR))
+    upright, _rotation, _skew = straighten(cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR), ocr=default_engine())
     return Image.fromarray(cv2.cvtColor(upright, cv2.COLOR_BGR2RGB))
 
 

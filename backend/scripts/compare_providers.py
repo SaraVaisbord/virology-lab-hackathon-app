@@ -12,11 +12,11 @@ from __future__ import annotations
 import argparse
 import sys
 
+import config
+from container import build_file_storage, build_llm_providers, verification_rules
 from db import queries
+from domain.verification import build_fields
 from domain.vocabulary import FIELD_LABELS, FIELD_STATUS_LABELS
-from openai_extractor import extract_from_image as openai_extract
-from services.extraction_service import build_fields, verification_rules
-from storage import get_storage
 
 _EMPTY = "—"
 
@@ -56,11 +56,12 @@ def main() -> None:
 
     print(f"Form {form['id']} · {form['source_file']} · page {form['page_number']} · barcodes on page: {len(barcodes)}")
     print("Asking OpenAI…", flush=True)
-    with get_storage().local_path(form["image_path"]) as image_path:
-        openai_result = openai_extract(image_path, senders, model=args.openai_model)
+    with build_file_storage(config).local_path(form["image_path"]) as image_path:
+        openai_result = build_llm_providers(config)["openai"].extract_from_image(image_path, senders, model=args.openai_model)
 
-    gemini_fields = build_fields(gemini_result, barcodes, senders, verification_rules(), page=form["page_number"])
-    openai_fields = build_fields(openai_result, barcodes, senders, verification_rules(), page=form["page_number"])
+    rules = verification_rules(config)
+    gemini_fields = build_fields(gemini_result, barcodes, senders, rules, page=form["page_number"])
+    openai_fields = build_fields(openai_result, barcodes, senders, rules, page=form["page_number"])
     usage = openai_result.get("_usage", {})
     print(f"Gemini: {gemini_result.get('_model')} (stored answer)")
     print(f"OpenAI: {openai_result['_model']} · {openai_result['_seconds']}s · tokens in/out: {usage.get('prompt_tokens')}/{usage.get('completion_tokens')}")
