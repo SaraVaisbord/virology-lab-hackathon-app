@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import ssl
 import threading
 import time
 from dataclasses import dataclass
@@ -27,6 +26,7 @@ from integrations.llm.errors import ExtractionError, MissingApiKeyError, ModelsU
 from integrations.llm.page_image import PageImageSettings, page_as_jpeg
 from integrations.llm.prompt import ExtractionPrompt
 from integrations.llm.schema import response_schema
+from integrations.llm.tls import TlsSettings, ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -147,22 +147,6 @@ class GeminiRouter:
             return {"total": len(self._routes), "available": sum(r.resting_until <= now for r in self._routes)}
 
 
-def _disable_ssl_verification_once() -> None:
-    # MVP workaround for a CA-certificate issue on Python 3.14 / Windows (settings.llm_insecure_ssl).
-    if getattr(ssl, "_gemini_patched", False):
-        return
-    original = ssl.create_default_context
-
-    def insecure_context(*args, **kwargs):
-        ctx = original(*args, **kwargs)
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
-    ssl.create_default_context = insecure_context
-    ssl._gemini_patched = True  # type: ignore[attr-defined]
-
-
 def _parse_response(response) -> dict[str, Any]:
     try:
         result = json.loads(response.text or "")
@@ -178,22 +162,25 @@ class GeminiProvider:
     name = "gemini"
 
     def __init__(self, settings: GeminiSettings, prompt: ExtractionPrompt, image: PageImageSettings,
-                 verify_tls: bool = True, new_client: Callable[[int], Any] | None = None) -> None:
+                 tls: TlsSettings | None = None, new_client: Callable[[int], Any] | None = None) -> None:
         self._settings = settings
         self._prompt = prompt
         self._image = image
-        self._verify_tls = verify_tls
+        self._tls = tls
         self.router = GeminiRouter(len(settings.api_keys), settings.models, new_client or self._new_client)
 
     def _new_client(self, key_index: int):
         from google import genai
         from google.genai import types
 
-        if not self._verify_tls:
-            _disable_ssl_verification_once()
+        context = ssl_context(self._tls)
         return genai.Client(
             api_key=self._settings.api_keys[key_index],
-            http_options=types.HttpOptions(timeout=self._settings.timeout_seconds * 1000),
+            http_options=types.HttpOptions(
+                timeout=self._settings.timeout_seconds * 1000,
+                # Only this client's connections; the SDK uses its default context when none is given.
+                client_args={"verify": context} if context is not None else None,
+            ),
         )
 
     def _cooldown_seconds(self, kind: str, exc: Exception) -> float:

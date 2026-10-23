@@ -23,6 +23,7 @@ from integrations.llm.errors import ExtractionError, MissingApiKeyError
 from integrations.llm.page_image import PageImageSettings, page_as_jpeg
 from integrations.llm.prompt import ExtractionPrompt
 from integrations.llm.schema import response_schema
+from integrations.llm.tls import TlsSettings, ssl_context
 
 
 @dataclass(frozen=True)
@@ -71,11 +72,12 @@ def drop_nulls(value: Any) -> Any:
 class OpenAIProvider:
     name = "openai"
 
-    def __init__(self, settings: OpenAISettings, prompt: ExtractionPrompt, image: PageImageSettings, verify_tls: bool = True) -> None:
+    def __init__(self, settings: OpenAISettings, prompt: ExtractionPrompt, image: PageImageSettings,
+                 tls: TlsSettings | None = None) -> None:
         self._settings = settings
         self._prompt = prompt
         self._image = image
-        self._verify_tls = verify_tls
+        self._tls = tls
 
     def extract_from_image(self, image_path: str | Path, known_senders: list[str] | None = None, model: str | None = None) -> dict[str, Any]:
         """Return OpenAI's JSON for one page in the same shape as Gemini's.
@@ -108,7 +110,7 @@ class OpenAIProvider:
                 json=body,
                 headers={"Authorization": f"Bearer {settings.api_key}"},
                 timeout=settings.timeout_seconds,
-                verify=self._verify_tls,
+                verify=ssl_context(self._tls) or True,
             )
         except httpx.HTTPError as exc:
             raise ExtractionError(f"OpenAI request failed: {type(exc).__name__}") from None

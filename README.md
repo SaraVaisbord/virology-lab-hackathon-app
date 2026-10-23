@@ -101,6 +101,8 @@ All settings live in `backend/.env` (never committed); defaults are in `backend/
 | `AUTH_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Where login codes are sent, and how |
 | `AUTH_SECRET` | Signs session cookies, so sessions survive a restart |
 | `AUTH_DEMO_CODE` | **Demo only:** no e-mail is sent and this fixed code logs in. Remove before real data |
+| `LLM_CA_BUNDLE` | A CA file (PEM) to trust for the AI providers' connections — e.g. behind a filtering proxy with its own certificate |
+| `LLM_INSECURE_SSL` | **Local development only:** skip certificate checks of the AI connections (default off; never the rest of the process) |
 | `DATABASE_URL`, `STORAGE_BACKEND`, `S3_BUCKET`, `API_PREFIX` | Cloud settings (PostgreSQL, S3, `/api` behind the load balancer) |
 
 ### Tests

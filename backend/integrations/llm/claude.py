@@ -27,6 +27,7 @@ from integrations.llm.errors import ExtractionError, MissingApiKeyError, ModelsU
 from integrations.llm.page_image import PageImageSettings, page_as_jpeg
 from integrations.llm.prompt import ExtractionPrompt
 from integrations.llm.schema import response_schema
+from integrations.llm.tls import TlsSettings, ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -107,18 +108,19 @@ class ClaudeProvider:
     name = "claude"
 
     def __init__(self, settings: ClaudeSettings, prompt: ExtractionPrompt, image: PageImageSettings,
-                 verify_tls: bool = True, new_client: Callable[[int], Any] | None = None) -> None:
+                 tls: TlsSettings | None = None, new_client: Callable[[int], Any] | None = None) -> None:
         self._settings = settings
         self._prompt = prompt
         self._image = image
-        self._verify_tls = verify_tls
+        self._tls = tls
         self._new_client = new_client or self._default_client
         self._clients: dict[int, Any] = {}
         self._lock = threading.Lock()
         self._resting: dict[int, tuple[float, str]] = {}  # key index → (resting until, "quota" | "busy" | "rejected_key")
 
     def _default_client(self, key_index: int) -> anthropic.Anthropic:
-        http_client = anthropic.DefaultHttpxClient(verify=False) if not self._verify_tls else None
+        context = ssl_context(self._tls)
+        http_client = anthropic.DefaultHttpxClient(verify=context) if context is not None else None
         return anthropic.Anthropic(
             api_key=self._settings.api_keys[key_index], timeout=self._settings.timeout_seconds, http_client=http_client,
         )

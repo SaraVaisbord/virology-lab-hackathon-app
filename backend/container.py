@@ -17,6 +17,7 @@ from integrations.llm.openai import OpenAIProvider, OpenAISettings
 from integrations.llm.page_image import PageImageSettings
 from integrations.llm.prompt import ExtractionPrompt
 from integrations.llm.router import LlmRouter
+from integrations.llm.tls import TlsSettings
 from integrations.mailer import Mailer, SmtpMailer, SmtpSettings
 from integrations.ocr.base import OcrEngine
 from integrations.ocr.local_extractor import LocalExtractor
@@ -34,7 +35,7 @@ from services.upload_service import UploadService, UploadSettings
 def build_llm_providers(settings: Settings) -> dict[str, LlmProvider]:
     prompt = ExtractionPrompt(settings.extraction_prompt_file)
     image = PageImageSettings(max_side_px=settings.gemini_image_max_side_px, jpeg_quality=settings.gemini_image_jpeg_quality)
-    verify_tls = not settings.llm_insecure_ssl
+    tls = TlsSettings(ca_bundle=settings.llm_ca_bundle, insecure=settings.llm_insecure_ssl)
     return {
         "gemini": GeminiProvider(GeminiSettings(
             api_keys=settings.gemini_api_keys, models=settings.gemini_models, timeout_seconds=settings.gemini_timeout_seconds,
@@ -42,18 +43,18 @@ def build_llm_providers(settings: Settings) -> dict[str, LlmProvider]:
             quota_default_backoff_seconds=settings.gemini_quota_default_backoff_seconds,
             busy_cooldown_seconds=settings.gemini_busy_cooldown_seconds,
             invalid_key_cooldown_seconds=settings.gemini_invalid_key_cooldown_seconds,
-        ), prompt, image, verify_tls),
+        ), prompt, image, tls),
         "claude": ClaudeProvider(ClaudeSettings(
             api_keys=settings.anthropic_api_keys, model=settings.claude_model, effort=settings.claude_effort,
             max_tokens=settings.claude_max_tokens, timeout_seconds=settings.claude_timeout_seconds,
             quota_default_backoff_seconds=settings.claude_quota_default_backoff_seconds,
             busy_cooldown_seconds=settings.claude_busy_cooldown_seconds,
             invalid_key_cooldown_seconds=settings.claude_invalid_key_cooldown_seconds,
-        ), prompt, image, verify_tls),
+        ), prompt, image, tls),
         "openai": OpenAIProvider(OpenAISettings(
             api_key=settings.openai_api_key, model=settings.openai_model, api_url=settings.openai_api_url,
             timeout_seconds=settings.openai_timeout_seconds,
-        ), prompt, image, verify_tls),
+        ), prompt, image, tls),
     }
 
 

@@ -107,5 +107,8 @@ the form status is recalculated and the modal moves to the next field needing re
 ## 6. Operational notes
 
 - Gemini free tier: ~20 requests/day per model — the queue pauses and resumes automatically when exhausted.
-- `GEMINI_INSECURE_SSL` (default on) works around a local CA-certificate issue; turn it off in production.
+- TLS of the AI providers' connections is verified by default. A "certificate verify failed" error usually means a
+  filtering proxy / antivirus re-signs HTTPS with its own certificate: export that CA as PEM and set `LLM_CA_BUNDLE`.
+  `LLM_INSECURE_SSL=true` skips verification for those clients only (local development only); nothing changes the
+  process-wide SSL settings, so S3 and SMTP are always verified.
 - Migrations: `alembic upgrade head`. SQLite batch migrations run with foreign keys disabled to avoid cascade deletes.

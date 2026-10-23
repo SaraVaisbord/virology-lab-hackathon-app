@@ -105,6 +105,7 @@ class Settings:
     openai_model: str
     openai_api_url: str
     openai_timeout_seconds: int
+    llm_ca_bundle: str
     llm_insecure_ssl: bool
     extraction_prompt_file: Path
 
@@ -262,8 +263,10 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         openai_model=env.str("OPENAI_MODEL", "gpt-5.4-mini"),  # same tier as Gemini Flash, for a fair comparison
         openai_api_url=env.str("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions"),
         openai_timeout_seconds=env.int("OPENAI_TIMEOUT_SECONDS", 180),
-        # MVP workaround for a local CA-certificate issue (Python 3.14 / Windows), used for Gemini, Claude and OpenAI
-        # calls. Turn off in production.
-        llm_insecure_ssl=env.bool("GEMINI_INSECURE_SSL", True),
+        # TLS of the LLM providers' connections (only theirs — see integrations/llm/tls.py). Behind a filtering proxy
+        # with its own certificate: LLM_CA_BUNDLE = that CA as a PEM file. LLM_INSECURE_SSL=true skips verification
+        # of these connections — local development only, never in production.
+        llm_ca_bundle=env.stripped("LLM_CA_BUNDLE"),
+        llm_insecure_ssl=env.bool("LLM_INSECURE_SSL", False),
         extraction_prompt_file=BASE_DIR / "prompts" / env.str("EXTRACTION_PROMPT_FILE", "extraction_prompt.md"),
     )
