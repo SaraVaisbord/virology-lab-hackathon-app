@@ -11,6 +11,7 @@ import { api } from '../../api'
 import { useMeta } from '../../meta/MetaContext'
 import { fieldDisplayValue, formatDateTime } from '../../lib/format'
 import { pageNumbers } from '../../lib/pageNumbers'
+import { FIELD_STATUS, FORM_STATUS } from '../../lib/domainKeys'
 
 /** Next field that still needs a decision, searching forward from the current one (wrapping around). */
 function nextFieldToReview(fields, currentId, needsReview) {
@@ -61,7 +62,7 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
   // Fresh copy after every edit; gone once the worker fixed the number.
   const activeCompare = compare && (form.duplicates ?? []).find((dup) => dup.field_id === compare.field_id && dup.other_field_id === compare.other_field_id)
   const assignNumber = (fieldName, item) => {
-    const hasValue = (form.fields ?? []).some((field) => field.field_name === fieldName && field.status !== 'not_found')
+    const hasValue = (form.fields ?? []).some((field) => field.field_name === fieldName && field.status !== FIELD_STATUS.NOT_FOUND)
     return applyEdit(() => api.addField(form.id, fieldName, item.value, {
       replace: hasValue && !meta.isMultiValue(fieldName), // a single-value field takes the picked value instead
       box: item.box,
@@ -117,7 +118,7 @@ export default function FormDetailsModal({ form: initialForm, initialFieldId, ed
         <StatusBadge status={form.status} />
         <span>עמוד {form.page_number}</span>
         <span>הועלה {formatDateTime(form.uploaded_at)}</span>
-        {form.status === 'failed' && (
+        {form.status === FORM_STATUS.FAILED && (
           <button type="button" onClick={() => onRetry(form)} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300">
             <RotateCcw size={13} /> נסה שוב
           </button>

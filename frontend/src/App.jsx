@@ -11,6 +11,7 @@ import { api } from './api'
 import { useForms } from './hooks/useForms'
 import { useDebouncedValue } from './hooks/useDebouncedValue'
 import { useHashRoute } from './hooks/useHashRoute'
+import { FORM_STATUS } from './lib/domainKeys'
 
 const TOAST_DURATION_MS = 2500
 const INITIAL_FILTERS = { status: '', query: '', columnFilters: {}, sortBy: 'id', sortDir: 'desc' }
@@ -99,7 +100,7 @@ export default function App() {
           <p className="mt-0.5 hidden text-sm text-gray-400 dark:text-gray-500 sm:block">העלאה, חילוץ אוטומטי ואימות של טפסי התחייבות</p>
         </div>
 
-        <ProcessingBanner summary={summary} onShowFailed={() => changeFilters({ status: 'failed' })} />
+        <ProcessingBanner summary={summary} onShowFailed={() => changeFilters({ status: FORM_STATUS.FAILED })} />
 
         <div className="card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
           <TableToolbar filters={filters} onChangeFilters={changeFilters} onAddFile={() => setUploadOpen(true)} onExport={handleExport} exporting={exporting} />

@@ -5,6 +5,7 @@ import { useMeta } from '../../meta/MetaContext'
 import { EMPTY, fieldDisplayValue } from '../../lib/format'
 import { fieldsUsing, fitsKind, valueKey } from '../../lib/pageNumbers'
 import PageNumberRow from './PageNumberRow'
+import { SOURCE } from '../../lib/domainKeys'
 
 const AGREEMENT_STYLES = {
   agree: 'border-teal-200 bg-teal-50 text-teal-800 dark:border-teal-900 dark:bg-teal-950/30 dark:text-teal-200',
@@ -115,8 +116,8 @@ function SourceEvidence({ field, sources, onUse }) {
             note={[
               evidence.ocr.anchor ? `נמצא ${evidence.ocr.label}` // e.g. "under the central number 12043017"
                 : evidence.ocr.label ? `ליד התווית "${evidence.ocr.label}"` : 'נקרא בעמוד, בלי תווית ליד – מאשר את הקריאה, לא את השדה',
-              evidence.ocr.source === 'barcode' ? 'הערך נקרא מברקוד שליד התווית' : null,
-              evidence.ocr.confidence != null && evidence.ocr.source !== 'barcode' ? `ביטחון OCR ${Math.round(evidence.ocr.confidence)}` : null,
+              evidence.ocr.source === SOURCE.BARCODE ? 'הערך נקרא מברקוד שליד התווית' : null,
+              evidence.ocr.confidence != null && evidence.ocr.source !== SOURCE.BARCODE ? `ביטחון OCR ${Math.round(evidence.ocr.confidence)}` : null,
             ].filter(Boolean).join(' · ')}
             onUse={onUse}
           />
