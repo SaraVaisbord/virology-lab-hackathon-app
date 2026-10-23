@@ -13,9 +13,9 @@ import argparse
 import sys
 
 from db import queries
-from db.constants import FIELD_LABELS, FIELD_STATUS_LABELS
+from domain.vocabulary import FIELD_LABELS, FIELD_STATUS_LABELS
 from openai_extractor import extract_from_image as openai_extract
-from services.extraction_service import build_fields
+from services.extraction_service import build_fields, verification_rules
 from storage import get_storage
 
 _EMPTY = "—"
@@ -59,8 +59,8 @@ def main() -> None:
     with get_storage().local_path(form["image_path"]) as image_path:
         openai_result = openai_extract(image_path, senders, model=args.openai_model)
 
-    gemini_fields = build_fields(gemini_result, barcodes, senders, page=form["page_number"])
-    openai_fields = build_fields(openai_result, barcodes, senders, page=form["page_number"])
+    gemini_fields = build_fields(gemini_result, barcodes, senders, verification_rules(), page=form["page_number"])
+    openai_fields = build_fields(openai_result, barcodes, senders, verification_rules(), page=form["page_number"])
     usage = openai_result.get("_usage", {})
     print(f"Gemini: {gemini_result.get('_model')} (stored answer)")
     print(f"OpenAI: {openai_result['_model']} · {openai_result['_seconds']}s · tokens in/out: {usage.get('prompt_tokens')}/{usage.get('completion_tokens')}")

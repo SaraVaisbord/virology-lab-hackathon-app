@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, MetaData, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from .constants import (
+from domain.vocabulary import (
     CHANGE_KINDS,
     CONFIDENCE_LEVELS,
     FIELD_EVENT_ACTIONS,

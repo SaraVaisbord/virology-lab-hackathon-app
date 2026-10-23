@@ -12,7 +12,7 @@ import pymupdf
 from PIL import Image, ImageOps
 
 import config
-from db.constants import UPLOAD_TYPES
+from domain.vocabulary import UPLOAD_TYPES
 from preprocessing import straighten
 from db.queries import add_form, delete_forms_by_hash, find_forms_by_hash
 from storage import PAGES_PREFIX, UPLOADS_PREFIX, get_storage, page_key, upload_key

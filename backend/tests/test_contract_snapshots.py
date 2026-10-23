@@ -97,9 +97,10 @@ CASES = {
 
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_build_fields_output_is_unchanged(name):
-    from services.extraction_service import build_fields
+    from domain.verification import VerificationRules, build_fields
 
     case = CASES[name]
-    fields = build_fields(case["llm"], case["barcodes"], SENDERS, page=1, local_candidates=case.get("local"),
+    rules = VerificationRules(received_date_max_age_days=365, local_ocr_min_confidence=60)
+    fields = build_fields(case["llm"], case["barcodes"], SENDERS, rules, page=1, local_candidates=case.get("local"),
                           ocr_numbers=case.get("ocr_numbers"), sample_is_commitment=case.get("sample_is_commitment", False))
     _matches_snapshot(f"build_fields/{name}.json", fields)

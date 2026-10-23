@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 import config
-from db.constants import (
+from domain.vocabulary import (
     AGREEMENT_LABELS,
     BARCODE_MATCH_LABELS,
     CONFIDENCE_LABELS,

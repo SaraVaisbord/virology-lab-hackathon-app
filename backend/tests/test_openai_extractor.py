@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from db.constants import FIELDS
+from domain.vocabulary import FIELDS
 from integrations.llm.openai import drop_nulls, strict_schema
 
 

@@ -32,7 +32,7 @@ from PIL import Image
 
 import barcode_reader
 import ocr_reader
-from db.constants import LOCAL_LABEL_LEXICON
+from domain.vocabulary import LOCAL_LABEL_LEXICON
 from preprocessing import preprocess
 
 MIN_CONFIDENCE = 60

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from db.constants import FORM_TYPES
+from domain.vocabulary import FORM_TYPES
 
 
 class ExtractionPrompt:

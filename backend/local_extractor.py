@@ -26,7 +26,7 @@ import cv2
 
 import config
 import ocr_reader
-from db.constants import (
+from domain.vocabulary import (
     DATE_PATTERN,
     FIELD_KINDS,
     FORM_TYPE_MARKERS,
@@ -42,7 +42,7 @@ from db.constants import (
 )
 from ocr_reader import OcrWord
 from preprocessing import PageViews
-from validators import israeli_id_is_valid
+from domain.validators import israeli_id_is_valid
 
 
 @dataclass(frozen=True)

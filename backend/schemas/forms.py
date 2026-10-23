@@ -18,7 +18,7 @@ class FieldResponse(BaseModel):
     status: str
     confidence: str | None = None
     reason: str | None = None
-    # Per-source candidates, assignment evidence and agreement verdict (see extraction_service.build_fields).
+    # Per-source candidates, assignment evidence and agreement verdict (see domain/verification.build_fields).
     evidence: dict[str, Any] | None = None
     page: int | None = None
     # Normalized to the page image (0..1); box_source says which source the box came from.

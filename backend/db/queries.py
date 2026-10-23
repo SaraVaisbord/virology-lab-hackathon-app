@@ -9,7 +9,7 @@ from sqlalchemy import Select, String, and_, asc, cast, delete, desc, exists, fu
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import object_session, selectinload
 
-from .constants import (
+from domain.vocabulary import (
     FIELDS,
     FIELD_KINDS,
     ROW_KEY_FIELD,
@@ -28,7 +28,7 @@ from .constants import (
 )
 from .models import ExtractedField, FieldEvent, Form, Sender
 from .session import SessionLocal
-from validators import classify_change, digits_only, match_key, parse_iso_like_date
+from domain.validators import classify_change, digits_only, match_key, parse_iso_like_date
 
 # ── Validation ───────────────────────────────────────────────────────────────
 

@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 import config
-from validators import israeli_id_is_valid
+from domain.validators import israeli_id_is_valid
 
 
 @dataclass(frozen=True)

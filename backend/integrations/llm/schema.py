@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from db.constants import CONFIDENCE_LEVELS, FIELDS, FORM_TYPES, INVENTORY_KINDS, UNASSIGNED
+from domain.vocabulary import CONFIDENCE_LEVELS, FIELDS, FORM_TYPES, INVENTORY_KINDS, UNASSIGNED
 
 
 @lru_cache(maxsize=1)

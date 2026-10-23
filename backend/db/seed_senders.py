@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from .constants import SENDER_KINDS
+from domain.vocabulary import SENDER_KINDS
 from .models import Sender
 from .session import SessionLocal
 

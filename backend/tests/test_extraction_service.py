@@ -6,12 +6,18 @@ from datetime import date, timedelta
 
 import pytest
 
-from db.constants import EXTRACTION_ERRORS, FIELDS, OCR_UNAVAILABLE_REASON, REASONS
-from services.extraction_service import build_fields, match_sender
+from domain.vocabulary import EXTRACTION_ERRORS, FIELDS, OCR_UNAVAILABLE_REASON, REASONS
+from domain.verification import VerificationRules, match_sender
+from domain.verification import build_fields as _build_fields
 from tests.conftest import DummyUpload, make_form, png_bytes
 
 VALID_ID = "000000018"
 SENDERS = ["המרכז הרפואי שמיר", "כללית"]
+RULES = VerificationRules(received_date_max_age_days=365, local_ocr_min_confidence=60)
+
+
+def build_fields(llm, barcodes, senders, **kwargs):
+    return _build_fields(llm, barcodes, senders, RULES, **kwargs)
 
 
 def _by_name(fields, name):
@@ -411,7 +417,7 @@ def test_one_date_under_the_central_number_can_verify():
 
 
 def test_sample_label_supports_a_commitment_only_where_the_sample_is_the_commitment():
-    from services.extraction_service import sample_is_commitment_on
+    from domain.verification import sample_is_commitment_on
 
     llm = {"commitment_number": [{"value": "7712345", "confidence": "high", "label": "מספר דגימה"}]}
     (declared,) = _by_name(build_fields(llm, [], SENDERS, sample_is_commitment=True), "commitment_number")

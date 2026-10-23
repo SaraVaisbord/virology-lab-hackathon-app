@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import alembic_config, make_form
-from validators import classify_change
+from domain.validators import classify_change
 
 # A commitment number the AI misread by one digit, while the barcode read it right.
 _MISREAD = {
@@ -310,7 +310,7 @@ def test_api_correction_records_event_and_response_is_unchanged(client):
 
 def test_every_allowed_value_fits_its_column():
     """SQLite ignores VARCHAR lengths, PostgreSQL enforces them — catch a value that is too long before it gets there."""
-    from db.constants import CHANGE_KINDS, CONFIDENCE_LEVELS, FIELD_EVENT_ACTIONS, FIELD_STATUSES, FIELDS, INVENTORY_KINDS, SOURCE_LABELS, VALUE_ORIGINS
+    from domain.vocabulary import CHANGE_KINDS, CONFIDENCE_LEVELS, FIELD_EVENT_ACTIONS, FIELD_STATUSES, FIELDS, INVENTORY_KINDS, SOURCE_LABELS, VALUE_ORIGINS
     from db.models import FieldEvent
 
     columns = FieldEvent.__table__.columns

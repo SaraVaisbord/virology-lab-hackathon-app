@@ -5,7 +5,7 @@ from fastapi.responses import Response
 
 import config
 from db import queries
-from db.constants import EXPORT_MODE_LABELS
+from domain.vocabulary import EXPORT_MODE_LABELS
 from schemas.forms import AddFieldRequest, ConfirmFieldRequest, FormDetailResponse, FormsPage, FormsSummary
 from services.export_service import build_forms_workbook
 from services.extraction_queue import extraction_queue

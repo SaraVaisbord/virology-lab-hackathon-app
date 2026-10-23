@@ -14,14 +14,14 @@ from typing import Any, Iterator
 
 import config
 from db import queries
-from db.constants import (
+from domain.verification import match_sender
+from domain.vocabulary import (
     FIELD_LABELS,
     INSIGHT_RECOMMENDATIONS,
     INSIGHT_STATUS_MESSAGES,
     SOURCE_LABELS,
     WRONG_VALUE_CHANGE_KINDS,
 )
-from services.extraction_service import match_sender
 
 _SUPPORT_ORDER = {"high": 0, "medium": 1, "low": 2}
 # Insight detail columns: the one that refines a pattern (e.g. which digit swap), set per pattern below.

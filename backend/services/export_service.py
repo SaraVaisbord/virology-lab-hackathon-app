@@ -17,8 +17,8 @@ from openpyxl.utils import get_column_letter
 
 import config
 from db import queries
-from db.constants import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_COLUMN_LABELS, FORM_STATUS_LABELS, MULTI_VALUE_FIELDS, ROW_KEY_FIELD
-from validators import digits_only
+from domain.vocabulary import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_COLUMN_LABELS, FORM_STATUS_LABELS, MULTI_VALUE_FIELDS, ROW_KEY_FIELD
+from domain.validators import digits_only
 
 _MULTI_VALUE_SEPARATOR = ", "
 _DATE_FORMAT = "yyyy-mm-dd hh:mm"

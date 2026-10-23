@@ -4,7 +4,7 @@ import io
 
 from openpyxl import load_workbook
 
-from db.constants import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_STATUS_LABELS, REASONS
+from domain.vocabulary import EXPORT_COLUMN_LABELS, FIELD_LABELS, FORM_STATUS_LABELS, REASONS
 from tests.conftest import make_form
 
 
@@ -78,14 +78,14 @@ def test_export_respects_filters_and_mode(client):
 def test_source_evidence_reaches_the_api(client):
     """Spec 7/8: per-source results and per-field evidence survive until the API response."""
     from db import queries
-    from services.extraction_service import build_fields
+    from services.extraction_service import build_fields, verification_rules
 
     form_id = make_form(queries)
     llm = {"commitment_number": [{"value": "2646", "confidence": "high", "label": "מספר התחייבות"}]}
     barcodes = [{"data": "2646", "type": "CODE39", "x": 0.1, "y": 0.1, "width": 0.1, "height": 0.1, "page": 1}]
     queries.save_source_results(form_id, llm_result=llm, barcode_result={"status": "ok", "items": barcodes},
                                 ocr_result={"status": "unavailable", "items": []})
-    queries.save_extraction(form_id, build_fields(llm, barcodes, []))
+    queries.save_extraction(form_id, build_fields(llm, barcodes, [], verification_rules()))
 
     detail = client.get(f"/forms/{form_id}").json()
     assert detail["sources"]["llm_result"] == llm
