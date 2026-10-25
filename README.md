@@ -119,6 +119,20 @@ insights, login and the API; snapshot tests (`tests/snapshots/`) pin the API con
 verification rules. No test ever calls a real AI provider or reads real API keys. Lint: `ruff check .` · types
 (advisory, not blocking): `mypy .`
 
+### CI/CD
+
+[`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml):
+
+| Event | What runs |
+|---|---|
+| Pull request to `master` | Lint and tests on SQLite and on PostgreSQL 16, frontend build |
+| Merge to `master` | The same, then: next version tag (`v1.2.3`), both images to ECR under it, the tag committed to the Kubernetes repository and applied to EKS, wait for the rollout |
+
+Versions bump the patch number; `#minor` or `#major` in a commit message since the last release bumps that part
+instead. AWS access is through GitHub OIDC (no stored keys). Settings in the repository: variable `AWS_ROLE_ARN`
+(the role the workflow assumes) and secret `K8S_REPO_TOKEN` (a fine-grained token with *Contents: read and write*
+on the Kubernetes repository only).
+
 ## API overview
 
 All routes are served under `API_PREFIX` (`/api` in the cloud).
