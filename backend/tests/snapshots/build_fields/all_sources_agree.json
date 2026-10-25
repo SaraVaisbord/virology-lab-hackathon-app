@@ -1,0 +1,206 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": "000000018",
+  "box_source": "barcode",
+  "confidence": "high",
+  "evidence": {
+   "agreement": "agree",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": "ת\"ז",
+    "label_supports": true,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": "ת\"ז"
+   },
+   "barcode_candidates": [
+    {
+     "box": {
+      "height": 0.03,
+      "width": 0.05,
+      "x": 0.1,
+      "y": 0.5
+     },
+     "data": "000000018",
+     "match": "exact",
+     "type": "CODE128"
+    }
+   ],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": "ת\"ז",
+    "reason": null,
+    "value": "000-000-018"
+   },
+   "ocr": {
+    "anchor": null,
+    "confidence": 90.0,
+    "distance": 0.05,
+    "label": "ת\"ז",
+    "raw": "000000018",
+    "source": "ocr"
+   },
+   "ocr_candidates": [
+    "000000018"
+   ],
+   "sources": [
+    "barcode",
+    "llm",
+    "ocr"
+   ]
+  },
+  "field_name": "id_number",
+  "height": 0.03,
+  "llm_value": "000-000-018",
+  "ocr_value": "000000018",
+  "page": 1,
+  "reason": null,
+  "status": "verified",
+  "value": "000000018",
+  "width": 0.05,
+  "x": 0.1,
+  "y": 0.5
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "central_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": "555123",
+  "box_source": "barcode",
+  "confidence": "high",
+  "evidence": {
+   "agreement": "agree",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": "מספר התחייבות",
+    "label_supports": true,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": "מספר התחייבות"
+   },
+   "barcode_candidates": [
+    {
+     "box": {
+      "height": 0.03,
+      "width": 0.05,
+      "x": 0.1,
+      "y": 0.2
+     },
+     "data": "555123",
+     "match": "exact",
+     "type": "CODE128"
+    }
+   ],
+   "llm": {
+    "box": {
+     "height": 0.1,
+     "width": 0.19999999999999998,
+     "x": 0.1,
+     "y": 0.1
+    },
+    "confidence": "high",
+    "label": "מספר התחייבות",
+    "reason": null,
+    "value": "555123"
+   },
+   "ocr": {
+    "anchor": null,
+    "confidence": 90.0,
+    "distance": 0.05,
+    "label": "מספר התחייבות",
+    "raw": "555123",
+    "source": "ocr"
+   },
+   "ocr_candidates": [
+    "555123"
+   ],
+   "sources": [
+    "barcode",
+    "llm",
+    "ocr"
+   ]
+  },
+  "field_name": "commitment_number",
+  "height": 0.03,
+  "llm_value": "555123",
+  "ocr_value": "555123",
+  "page": 1,
+  "reason": null,
+  "status": "verified",
+  "value": "555123",
+  "width": 0.05,
+  "x": 0.1,
+  "y": 0.2
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "received_date",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "sender",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ }
+]

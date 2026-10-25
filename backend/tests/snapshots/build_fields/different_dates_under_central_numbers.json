@@ -1,0 +1,137 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "id_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "central_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "commitment_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": null,
+  "box_source": "ocr",
+  "confidence": "high",
+  "evidence": {
+   "agreement": "insufficient",
+   "alternatives": [
+    "03/04/2001"
+   ],
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": "נתקבל"
+   },
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": {
+    "anchor": "מתחת למספר המרכזי 1",
+    "confidence": 90.0,
+    "distance": 0.05,
+    "label": "נתקבל",
+    "raw": "01/02/2001",
+    "source": "ocr"
+   },
+   "ocr_candidates": [
+    "01/02/2001"
+   ],
+   "sources": [
+    "ocr"
+   ]
+  },
+  "field_name": "received_date",
+  "height": 0.02,
+  "llm_value": null,
+  "ocr_value": "01/02/2001",
+  "page": 1,
+  "reason": "התאריך רחוק מהתאריך הנוכחי או עתידי – ייתכן שגיאת קריאה בספרות · נמצאו ערכים נוספים: 03/04/2001 · מתחת למספרים המרכזיים רשומים תאריכים שונים (01/02/2001, 03/04/2001) – יש לבחור את תאריך הקבלה",
+  "status": "uncertain",
+  "value": "01/02/2001",
+  "width": 0.1,
+  "x": 0.4,
+  "y": 0.3
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "sender",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ }
+]

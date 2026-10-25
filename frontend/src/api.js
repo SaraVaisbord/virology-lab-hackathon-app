@@ -12,7 +12,8 @@ async function parseError(response) {
   return new Error(typeof detail === 'string' && detail ? detail : 'הבקשה לשרת נכשלה')
 }
 
-async function request(path, { json, ...options } = {}) {
+/** Every call goes through here: a 401 shows the login screen, any other failure becomes an Error. */
+async function send(path, { json, ...options } = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: json !== undefined ? { 'Content-Type': 'application/json' } : undefined,
@@ -20,6 +21,11 @@ async function request(path, { json, ...options } = {}) {
   })
   if (response.status === 401) window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))
   if (!response.ok) throw await parseError(response)
+  return response
+}
+
+async function request(path, options) {
+  const response = await send(path, options)
   return response.status === 204 ? null : response.json()
 }
 
@@ -90,8 +96,7 @@ export const api = {
   exportForms: async (mode, filters) => {
     const params = filtersToParams(filters)
     params.set('mode', mode)
-    const response = await fetch(`${API_BASE_URL}/forms/export?${params}`)
-    if (!response.ok) throw await parseError(response)
+    const response = await send(`/forms/export?${params}`)
     return {
       blob: await response.blob(),
       fileName: fileNameFromDisposition(response.headers.get('content-disposition')),

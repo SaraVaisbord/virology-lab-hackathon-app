@@ -1,0 +1,107 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "id_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "central_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "commitment_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "received_date",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "sender",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ }
+]

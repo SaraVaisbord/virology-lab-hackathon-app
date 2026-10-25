@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
-import pytest
 
-from preprocessing import DEFAULT_SETTINGS, estimate_skew, preprocess, rotate
+from integrations.imaging.preprocessing import DEFAULT_SETTINGS, estimate_skew, preprocess, rotate
 
 # BGR colours measured on the sample scans (see preprocessing.PreprocessSettings).
 BLACK = (20, 20, 20)
@@ -27,12 +26,8 @@ def _ink_in(mask: np.ndarray, box) -> float:
     return float((mask[y0:y1, x0:x1] > 0).mean())
 
 
-@pytest.fixture(autouse=True)
-def _no_osd(monkeypatch):
-    # Orientation detection needs Tesseract; these tests are about the image operations only.
-    import preprocessing
-
-    monkeypatch.setattr(preprocessing, "fix_orientation", lambda image, settings: (image, 0))
+# Orientation detection needs an OCR engine; these tests are about the image operations only, so preprocess()
+# is called without one (the orientation step is skipped).
 
 
 def test_form_lines_are_removed_but_text_is_kept():

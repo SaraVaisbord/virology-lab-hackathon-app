@@ -6,12 +6,19 @@ from datetime import date, timedelta
 
 import pytest
 
-from db.constants import EXTRACTION_ERRORS, FIELDS, OCR_UNAVAILABLE_REASON, REASONS
-from services.extraction_service import build_fields, match_sender
-from tests.conftest import DummyUpload, make_form, png_bytes
+from domain.vocabulary import EXTRACTION_ERRORS, FIELDS, REASONS
+from domain.verification import VerificationRules, match_sender
+from integrations.llm.errors import ExtractionError, MissingApiKeyError, ModelsUnavailableError
+from domain.verification import build_fields as _build_fields
+from tests.conftest import make_form, png_bytes
 
 VALID_ID = "000000018"
 SENDERS = ["המרכז הרפואי שמיר", "כללית"]
+RULES = VerificationRules(received_date_max_age_days=365, local_ocr_min_confidence=60)
+
+
+def build_fields(llm, barcodes, senders, **kwargs):
+    return _build_fields(llm, barcodes, senders, RULES, **kwargs)
 
 
 def _by_name(fields, name):
@@ -200,13 +207,50 @@ def test_ocr_and_llm_dates_merge_on_the_normalized_value():
 # ── Pipeline: sources are called and stored separately ───────────────────────
 
 
-@pytest.fixture
-def fake_local_sources(monkeypatch):
-    """Replace zbar / Tesseract with canned answers (fast, deterministic); records the order of calls."""
-    import barcode_reader
-    import local_extractor
+class _FakeOcr:
+    """Installed, reads nothing (the local extraction itself is faked below)."""
 
-    state = {"calls": [], "barcodes": [_barcode("2646")], "local": []}
+    def is_available(self):
+        return True
+
+    def read_words(self, image, psm=11, languages=None, extra_config=None):
+        return []
+
+    def detect_rotation(self, image):
+        return 0, 0.0
+
+
+class _FakeProvider:
+    def __init__(self, answer=None, error=None, calls=None):
+        self.answer, self.error, self.calls = answer, error, calls
+
+    def extract_from_image(self, image_path, known_senders=None):
+        if self.calls is not None:
+            self.calls.append("llm")
+        if self.error is not None:
+            raise self.error
+        return dict(self.answer or {})
+
+
+def _unconfigured():
+    return _FakeProvider(error=MissingApiKeyError("no key"))
+
+
+@pytest.fixture
+def fake_local_sources():
+    """Canned zbar / OCR answers (fast, deterministic); records the order of calls."""
+    return {"calls": [], "barcodes": [_barcode("2646")], "local": []}
+
+
+@pytest.fixture
+def make_pipeline(container, fake_local_sources):
+    """make_pipeline(gemini=..., openai=..., llm_enabled=False) → an ExtractionPipeline over the test DB and data
+    folder, with the given LLM providers (the others unconfigured) and the canned local sources."""
+    from integrations.llm.router import LlmRouter
+    from integrations.storage import LocalStorage
+    from services.extraction_pipeline import ExtractionPipeline
+
+    state = fake_local_sources
 
     def scan(image):
         state["calls"].append("barcode")
@@ -216,37 +260,41 @@ def fake_local_sources(monkeypatch):
         def as_dict(self):
             return {"candidates": state["local"], "labels": [], "unassigned_numbers": []}
 
-    def extract(views, barcodes):
-        state["calls"].append("ocr")
-        return Result()
+    class Local:
+        ocr = _FakeOcr()
 
-    monkeypatch.setattr(barcode_reader, "scan_pil_image", scan)
-    monkeypatch.setattr(local_extractor, "extract", extract)
-    return state
+        def extract(self, views, barcodes):
+            state["calls"].append("ocr")
+            return Result()
+
+    def make(llm_enabled=False, **providers):
+        known = {name: providers.get(name) or _unconfigured() for name in ("gemini", "claude", "openai")}
+        router = LlmRouter(known, ["gemini", "claude"])
+        settings = container.settings
+        return ExtractionPipeline(container.forms, container.senders, LocalStorage(settings.data_dir), router, Local(), scan, RULES,
+                                  page_render_dpi=settings.page_render_dpi, llm_enabled=llm_enabled)
+    return make
 
 
-def _uploaded_form(queries, upload_service):
-    form_id = upload_service.process_upload(DummyUpload("a.png", png_bytes()))["form_ids"][0]
+def _uploaded_form(queries, container):
+    form_id = container.uploads.process_upload("a.png", png_bytes())["form_ids"][0]
     return form_id, queries.claim_next_form()
 
 
-def test_pipeline_calls_every_source_and_stores_results_separately(app_env, monkeypatch, fake_local_sources):
+def test_pipeline_calls_every_source_and_stores_results_separately(make_pipeline, fake_local_sources, queries, container):
     """Spec 1, 2, 7, 8."""
-    import ai_extractor
-    from db import queries
-    from services import extraction_service, upload_service
 
     fake_local_sources["local"] = [_local("commitment_number", "2646")]
     llm = {"commitment_number": [{"value": "2646", "confidence": "high", "label": "מספר התחייבות"}], "notes": "x"}
-    monkeypatch.setattr(ai_extractor, "extract_from_image", lambda path, senders: fake_local_sources["calls"].append("llm") or llm)
+    pipeline = make_pipeline(gemini=_FakeProvider(llm, calls=fake_local_sources["calls"]))
 
-    form_id, form = _uploaded_form(queries, upload_service)
-    extraction_service.extract_for_form(form, use_llm=True)
+    form_id, form = _uploaded_form(queries, container)
+    pipeline.extract(form, use_llm=True)
     assert fake_local_sources["calls"][-2:] == ["ocr", "llm"] and "barcode" in fake_local_sources["calls"]
 
     stored = queries.get_form(form_id, with_sources=True)
     sources = stored["sources"]
-    assert sources["llm_result"] == llm
+    assert sources["llm_result"] == {**llm, "_provider": "gemini"}
     assert sources["barcode_result"]["status"] == "ok" and sources["barcode_result"]["items"][0]["data"] == "2646"
     assert sources["barcode_result"]["items"][0]["page"] == 1
     assert sources["ocr_result"]["status"] == "ok" and sources["ocr_result"]["candidates"][0]["value"] == "2646"
@@ -257,35 +305,25 @@ def test_pipeline_calls_every_source_and_stores_results_separately(app_env, monk
     assert commitment["llm_value"] == commitment["barcode_value"] == commitment["ocr_value"] == "2646"
 
 
-def test_local_only_mode_never_calls_the_llm(app_env, monkeypatch, fake_local_sources):
-    import ai_extractor
-    from db import queries
-    from services import extraction_service, upload_service
+def test_local_only_mode_never_calls_the_llm(make_pipeline, fake_local_sources, queries, container):
 
     fake_local_sources["local"] = [_local("central_number", "12043017", label="מרכזי:")]
-    monkeypatch.setattr(ai_extractor, "extract_from_image", lambda *a: pytest.fail("LLM must not be called"))
-    form_id, form = _uploaded_form(queries, upload_service)
-    extraction_service.extract_for_form(form, use_llm=False)
+    pipeline = make_pipeline(gemini=_FakeProvider(error=AssertionError("LLM must not be called")))
+    form_id, form = _uploaded_form(queries, container)
+    pipeline.extract(form, use_llm=False)
 
     stored = queries.get_form(form_id, with_sources=True)
     assert stored["status"] == "extracted" and stored["sources"]["llm_result"] is None
     assert _by_name(stored["fields"], "central_number")[0]["ocr_value"] == "12043017"
 
 
-def test_llm_failure_keeps_barcode_and_ocr_results(app_env, monkeypatch, fake_local_sources):
+def test_llm_failure_keeps_barcode_and_ocr_results(make_pipeline, fake_local_sources, queries, container):
     """Spec 6."""
-    import ai_extractor
-    from db import queries
-    from services import upload_service
     from services.extraction_queue import ExtractionQueue
 
-    def broken(path, senders):
-        raise ai_extractor.ExtractionError("Gemini API error: boom")
-
-    monkeypatch.setattr(ai_extractor, "extract_from_image", broken)
-    monkeypatch.setattr("config.LLM_ENABLED", True)
-    form_id, form = _uploaded_form(queries, upload_service)
-    ExtractionQueue(1, 1).process(form)
+    pipeline = make_pipeline(gemini=_FakeProvider(error=ExtractionError("Gemini API error: boom")), llm_enabled=True)
+    form_id, form = _uploaded_form(queries, container)
+    ExtractionQueue(pipeline, container.forms, 1, 1).process(form)
 
     stored = queries.get_form(form_id, with_sources=True)
     assert stored["status"] == "failed" and stored["error"] == EXTRACTION_ERRORS["model"]
@@ -294,20 +332,13 @@ def test_llm_failure_keeps_barcode_and_ocr_results(app_env, monkeypatch, fake_lo
     assert stored["sources"]["source_errors"] == {"llm": EXTRACTION_ERRORS["model"]}
 
 
-def test_barcode_failure_keeps_other_results(app_env, monkeypatch, fake_local_sources):
+def test_barcode_failure_keeps_other_results(make_pipeline, fake_local_sources, queries, container):
     """Spec 6 (the other direction)."""
-    import ai_extractor
-    import barcode_reader
-    from db import queries
-    from services import extraction_service, upload_service
 
-    def broken_scan(image):
-        raise OSError("zbar missing")
-
-    monkeypatch.setattr(barcode_reader, "scan_pil_image", broken_scan)
-    monkeypatch.setattr(ai_extractor, "extract_from_image", lambda path, senders: {"central_number": [{"value": "12345", "confidence": "high"}]})
-    form_id, form = _uploaded_form(queries, upload_service)
-    extraction_service.extract_for_form(form, use_llm=True)
+    fake_local_sources["barcodes"] = None  # the fake zbar raises (None is not iterable)
+    pipeline = make_pipeline(gemini=_FakeProvider({"central_number": [{"value": "12345", "confidence": "high"}]}))
+    form_id, form = _uploaded_form(queries, container)
+    pipeline.extract(form, use_llm=True)
 
     stored = queries.get_form(form_id, with_sources=True)
     assert stored["status"] == "extracted"
@@ -316,19 +347,13 @@ def test_barcode_failure_keeps_other_results(app_env, monkeypatch, fake_local_so
     assert _by_name(stored["fields"], "central_number")[0]["llm_value"] == "12345"
 
 
-def test_quota_error_requeues_form_and_pauses_queue(app_env, monkeypatch, fake_local_sources):
-    import ai_extractor
-    from db import queries
-    from services import upload_service
+def test_quota_error_requeues_form_and_pauses_queue(make_pipeline, fake_local_sources, queries, container):
     from services.extraction_queue import ExtractionQueue
 
-    def rate_limited(path, senders):
-        raise ai_extractor.ModelsUnavailableError("429", retry_after_seconds=120, reason="quota")
-
-    monkeypatch.setattr(ai_extractor, "extract_from_image", rate_limited)
-    monkeypatch.setattr("config.LLM_ENABLED", True)
-    form_id, form = _uploaded_form(queries, upload_service)
-    queue = ExtractionQueue(1, 1)
+    quota = ModelsUnavailableError("429", retry_after_seconds=120, reason="quota")
+    pipeline = make_pipeline(gemini=_FakeProvider(error=quota), llm_enabled=True)
+    form_id, form = _uploaded_form(queries, container)
+    queue = ExtractionQueue(pipeline, container.forms, 1, 1)
     queue.process(form)
 
     assert queries.get_form(form_id)["status"] == "uploaded"
@@ -336,10 +361,7 @@ def test_quota_error_requeues_form_and_pauses_queue(app_env, monkeypatch, fake_l
     assert queue._pause_reason == "quota" and queue._seconds_until_resume() > 0
 
 
-def test_reverify_uses_stored_sources_without_calling_the_llm(app_env, monkeypatch):
-    import ai_extractor
-    from db import queries
-    from services import extraction_service
+def test_reverify_uses_stored_sources_without_calling_the_llm(make_pipeline, queries):
 
     form_id = make_form(queries)
     queries.save_source_results(
@@ -347,31 +369,27 @@ def test_reverify_uses_stored_sources_without_calling_the_llm(app_env, monkeypat
         llm_result={"central_number": [{"value": "555123", "confidence": "high"}], "commitment_number": [{"value": "555123", "confidence": "high"}]},
         barcode_result={"status": "ok", "items": [_barcode("555123")]},
     )
-    monkeypatch.setattr(ai_extractor, "extract_from_image", lambda *a: pytest.fail("LLM must not be called"))
+    pipeline = make_pipeline(gemini=_FakeProvider(error=AssertionError("LLM must not be called")))
 
-    assert extraction_service.reverify_form(form_id) is True
+    assert pipeline.reverify(form_id) is True
     statuses = {f["field_name"]: f["status"] for f in queries.get_form(form_id)["fields"] if f["field_name"] in ("central_number", "commitment_number")}
     assert statuses == {"central_number": "conflict", "commitment_number": "conflict"}
 
 
 def test_retry_delay_is_parsed_from_gemini_message():
-    from ai_extractor import _retry_after_seconds
+    from integrations.llm.gemini import retry_after_seconds
 
-    assert _retry_after_seconds("Please retry in 3h40m34.49s.") == 3 * 3600 + 40 * 60 + 34.49
-    assert _retry_after_seconds("Please retry in 13.2s") == 13.2
+    assert retry_after_seconds("Please retry in 3h40m34.49s.", 60) == 3 * 3600 + 40 * 60 + 34.49
+    assert retry_after_seconds("Please retry in 13.2s", 60) == 13.2
 
 
-def test_one_off_extraction_with_openai_provider(app_env, monkeypatch, fake_local_sources):
-    import openai_extractor
-    from db import queries
-    from services import extraction_service, upload_service
+def test_one_off_extraction_with_openai_provider(make_pipeline, fake_local_sources, queries, container):
 
     fake_local_sources["barcodes"] = []
-    monkeypatch.setattr(openai_extractor, "extract_from_image",
-                        lambda path, senders: {"central_number": [{"value": "12345", "confidence": "high"}], "_model": "gpt-test"})
-    form_id = upload_service.process_upload(DummyUpload("a.png", png_bytes()))["form_ids"][0]
+    pipeline = make_pipeline(openai=_FakeProvider({"central_number": [{"value": "12345", "confidence": "high"}], "_model": "gpt-test"}))
+    form_id = container.uploads.process_upload("a.png", png_bytes())["form_ids"][0]
 
-    assert extraction_service.extract_one(form_id, "openai", use_llm=True) == "extracted"
+    assert pipeline.extract_one(form_id, "openai", use_llm=True) == "extracted"
     stored = queries.get_form(form_id, with_sources=True)
     assert stored["sources"]["llm_result"]["_model"] == "gpt-test"
     assert _by_name(stored["fields"], "central_number")[0]["llm_value"] == "12345"
@@ -411,7 +429,7 @@ def test_one_date_under_the_central_number_can_verify():
 
 
 def test_sample_label_supports_a_commitment_only_where_the_sample_is_the_commitment():
-    from services.extraction_service import sample_is_commitment_on
+    from domain.verification import sample_is_commitment_on
 
     llm = {"commitment_number": [{"value": "7712345", "confidence": "high", "label": "מספר דגימה"}]}
     (declared,) = _by_name(build_fields(llm, [], SENDERS, sample_is_commitment=True), "commitment_number")

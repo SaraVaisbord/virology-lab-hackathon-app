@@ -1,0 +1,147 @@
+[
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "first_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "last_name",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "id_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "central_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": null,
+   "barcode_candidates": [],
+   "llm": null,
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": []
+  },
+  "field_name": "commitment_number",
+  "page": 1,
+  "reason": "השדה לא נמצא בטופס",
+  "status": "not_found"
+ },
+ {
+  "barcode_value": null,
+  "box_source": null,
+  "confidence": "medium",
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": null
+   },
+   "barcode_candidates": [],
+   "llm": {
+    "box": null,
+    "confidence": "medium",
+    "label": null,
+    "reason": null,
+    "value": "31/31/31"
+   },
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": [
+    "llm"
+   ]
+  },
+  "field_name": "received_date",
+  "llm_value": "31/31/31",
+  "ocr_value": null,
+  "page": 1,
+  "reason": "פורמט התאריך לא זוהה · רמת ביטחון נמוכה בזיהוי הערך",
+  "status": "uncertain",
+  "value": "31/31/31"
+ },
+ {
+  "barcode_value": null,
+  "box_source": null,
+  "confidence": "high",
+  "evidence": {
+   "agreement": "insufficient",
+   "assignment": {
+    "also_claimed_by": [],
+    "label": null,
+    "label_supports": null,
+    "ocr_assigned_elsewhere": [],
+    "ocr_label": null
+   },
+   "barcode_candidates": [],
+   "llm": {
+    "box": null,
+    "confidence": "high",
+    "label": null,
+    "reason": null,
+    "value": "המרכז הרפואי שמיר (אסף הרופא)"
+   },
+   "ocr": null,
+   "ocr_candidates": [],
+   "sources": [
+    "llm"
+   ]
+  },
+  "field_name": "sender",
+  "llm_value": "המרכז הרפואי שמיר (אסף הרופא)",
+  "ocr_value": null,
+  "page": 1,
+  "reason": "הערך נקרא רק על ידי ה-AI – אין מקור נוסף שמאשר אותו",
+  "status": "unverified",
+  "value": "המרכז הרפואי שמיר"
+ }
+]

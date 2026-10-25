@@ -3,6 +3,7 @@ import { Check, Copy, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import StatusBadge from '../ui/StatusBadge'
 import { useMeta } from '../../meta/MetaContext'
 import { EMPTY, fieldDisplayValue, groupFieldsByName } from '../../lib/format'
+import { FIELD_STATUS } from '../../lib/domainKeys'
 
 const iconButton = 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-slate-200 hover:text-gray-800 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-gray-100'
 
@@ -66,7 +67,7 @@ export default function FieldList({ fields, activeFieldId, onSelect, onEdit, onA
         {meta.fields.map(({ key, label, multi_value: multi }) => {
           // Multi-value fields hide their "not found" placeholder (adding a value replaces it); a single-value
           // field keeps it as its one editable row.
-          const rows = (groups[key] ?? []).filter((row) => row.status !== 'not_found' || !multi)
+          const rows = (groups[key] ?? []).filter((row) => row.status !== FIELD_STATUS.NOT_FOUND || !multi)
           const hasValue = rows.some((row) => fieldDisplayValue(row))
           const canAdd = multi || rows.length === 0
           return (

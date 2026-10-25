@@ -108,20 +108,39 @@ All settings live in `backend/.env` (never committed); defaults are in `backend/
 | `LLM_ENABLED` | `false` runs only the local stages (no tokens) |
 | `AUTH_ENABLED` | Login screen on/off (default on) |
 | `AUTH_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Where login codes are sent, and how |
-| `AUTH_SECRET` | Signs session cookies, so sessions survive a restart |
+| `AUTH_SECRET` | Signs session cookies, so sessions survive a restart. Required when more than one replica serves the API (the pending login code itself is kept in the database, as a salted hash) |
 | `AUTH_DEMO_CODE` | **Demo only:** no e-mail is sent and this fixed code logs in. Remove before real data |
+| `LLM_CA_BUNDLE` | A CA file (PEM) to trust for the AI providers' connections — e.g. behind a filtering proxy with its own certificate |
+| `LLM_INSECURE_SSL` | **Local development only:** skip certificate checks of the AI connections (default off; never the rest of the process) |
 | `DATABASE_URL`, `STORAGE_BACKEND`, `S3_BUCKET`, `API_PREFIX` | Cloud settings (PostgreSQL, S3, `/api` behind the load balancer) |
 
 ### Tests
 
 ```bash
 cd backend
+pip install -r requirements-dev.txt                         # pytest, ruff, mypy
 pytest                                                      # SQLite
 TEST_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/db pytest   # PostgreSQL, as on AWS RDS
 ```
 
 The suite covers the extraction pipeline, cross-validation rules, provider failover, the correction history,
-insights, login and the API. No test ever calls a real AI provider or reads real API keys.
+insights, login and the API; snapshot tests (`tests/snapshots/`) pin the API contract and the output of the
+verification rules. No test ever calls a real AI provider or reads real API keys. Lint: `ruff check .` · types
+(advisory, not blocking): `mypy .`
+
+### CI/CD
+
+[`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml):
+
+| Event | What runs |
+|---|---|
+| Pull request to `master` | Lint and tests on SQLite and on PostgreSQL 16, frontend build |
+| Merge to `master` | The same, then: next version tag (`v1.2.3`), both images to ECR under it, the tag committed to the Kubernetes repository and applied to EKS, wait for the rollout |
+
+Versions bump the patch number; `#minor` or `#major` in a commit message since the last release bumps that part
+instead. AWS access is through GitHub OIDC (no stored keys). Settings in the repository: variable `AWS_ROLE_ARN`
+(the role the workflow assumes) and secret `K8S_REPO_TOKEN` (a fine-grained token with *Contents: read and write*
+on the Kubernetes repository only).
 
 ## API overview
 
@@ -144,18 +163,25 @@ More detail on the backend: [`backend/README.md`](backend/README.md) · System d
 
 ```
 backend/
-  api/                  HTTP endpoints (auth, uploads, forms, insights, meta)
-  db/                   models, queries, and constants.py — the single source of truth for fields, labels, statuses
-  services/             extraction queue, cross-validation, provider failover, insights, export, login
-  preprocessing.py      page preprocessing
-  local_extractor.py    local OCR: labels → values
-  claude_extractor.py   Claude provider
-  ai_extractor.py       Gemini provider (key and model rotation)
+  main.py               server entry point (uvicorn main:app)
+  config.py             Settings: every value read once from the environment / .env
+  container.py          composition root: builds every component from the settings and wires them together
+  api/                  HTTP endpoints (auth, uploads, forms, insights, meta); components come in as dependencies
+  services/             use cases: extraction pipeline and queue, uploads, review, export, insights, login
+  domain/               the lab's rules, no I/O: vocabulary (fields, labels, statuses), validators, verification, review rules
+  db/                   models, session (Database) and repositories/ — data access per aggregate
+  integrations/         the outside world: llm/ (Gemini, Claude, OpenAI + failover), ocr/ (Tesseract, label → value),
+                        imaging/ (preprocessing, barcodes), storage (local / S3), mailer (SMTP)
+  experimental/         measured but not wired in (handwritten digits)
+  scripts/              command-line tools (extract_forms, compare_providers, evaluations)
   prompts/              the extraction prompt shared by all providers
   alembic/              database migrations (SQLite and PostgreSQL)
   tests/
 frontend/src/           the lab technician's interface (forms table, review screen, insights dashboard, login)
 ```
+
+Dependencies point inwards: `api → services → domain`; `services`, `db` and `integrations` depend on `domain`, never the
+other way round. Only `container.py` creates components, so tests can replace any outside service with a fake.
 
 ## Data and security
 

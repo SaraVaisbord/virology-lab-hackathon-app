@@ -1,0 +1,2104 @@
+{
+ "components": {
+  "schemas": {
+   "AddFieldRequest": {
+    "properties": {
+     "box": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/BoxPayload"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "field_name": {
+      "title": "Field Name",
+      "type": "string"
+     },
+     "picked_from": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Picked From"
+     },
+     "replace": {
+      "default": false,
+      "title": "Replace",
+      "type": "boolean"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "field_name",
+     "value"
+    ],
+    "title": "AddFieldRequest",
+    "type": "object"
+   },
+   "Body_upload_files_uploads_post": {
+    "properties": {
+     "files": {
+      "description": "One or more files",
+      "items": {
+       "contentMediaType": "application/octet-stream",
+       "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+     }
+    },
+    "required": [
+     "files"
+    ],
+    "title": "Body_upload_files_uploads_post",
+    "type": "object"
+   },
+   "BoxPayload": {
+    "properties": {
+     "height": {
+      "title": "Height",
+      "type": "number"
+     },
+     "width": {
+      "title": "Width",
+      "type": "number"
+     },
+     "x": {
+      "title": "X",
+      "type": "number"
+     },
+     "y": {
+      "title": "Y",
+      "type": "number"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "width",
+     "height"
+    ],
+    "title": "BoxPayload",
+    "type": "object"
+   },
+   "CodeRequest": {
+    "properties": {
+     "email": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email"
+     }
+    },
+    "title": "CodeRequest",
+    "type": "object"
+   },
+   "CommitmentDuplicate": {
+    "description": "A commitment number of this form that another form has too — with where it is on each page.",
+    "properties": {
+     "box_source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Box Source"
+     },
+     "field_id": {
+      "title": "Field Id",
+      "type": "integer"
+     },
+     "height": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Height"
+     },
+     "other_field_id": {
+      "title": "Other Field Id",
+      "type": "integer"
+     },
+     "other_form_id": {
+      "title": "Other Form Id",
+      "type": "integer"
+     },
+     "other_page_number": {
+      "title": "Other Page Number",
+      "type": "integer"
+     },
+     "other_source_file": {
+      "title": "Other Source File",
+      "type": "string"
+     },
+     "other_status": {
+      "title": "Other Status",
+      "type": "string"
+     },
+     "other_value": {
+      "title": "Other Value",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     },
+     "width": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Width"
+     },
+     "x": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "X"
+     },
+     "y": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Y"
+     }
+    },
+    "required": [
+     "field_id",
+     "value",
+     "other_form_id",
+     "other_field_id",
+     "other_source_file",
+     "other_page_number",
+     "other_status",
+     "other_value"
+    ],
+    "title": "CommitmentDuplicate",
+    "type": "object"
+   },
+   "ConfirmFieldRequest": {
+    "properties": {
+     "corrected_value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Corrected Value"
+     }
+    },
+    "title": "ConfirmFieldRequest",
+    "type": "object"
+   },
+   "CorrectionInsight": {
+    "properties": {
+     "concentrated_in": {
+      "$ref": "#/components/schemas/InsightConcentration"
+     },
+     "digit_swap": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Digit Swap"
+     },
+     "event_count": {
+      "title": "Event Count",
+      "type": "integer"
+     },
+     "field_name": {
+      "title": "Field Name",
+      "type": "string"
+     },
+     "first_seen": {
+      "format": "date-time",
+      "title": "First Seen",
+      "type": "string"
+     },
+     "last_seen": {
+      "format": "date-time",
+      "title": "Last Seen",
+      "type": "string"
+     },
+     "matched_field": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Matched Field"
+     },
+     "pattern_type": {
+      "title": "Pattern Type",
+      "type": "string"
+     },
+     "recommendation": {
+      "title": "Recommendation",
+      "type": "string"
+     },
+     "reviewed_count": {
+      "title": "Reviewed Count",
+      "type": "integer"
+     },
+     "share": {
+      "title": "Share",
+      "type": "number"
+     },
+     "source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source"
+     },
+     "support": {
+      "title": "Support",
+      "type": "string"
+     }
+    },
+    "required": [
+     "pattern_type",
+     "field_name",
+     "event_count",
+     "reviewed_count",
+     "share",
+     "first_seen",
+     "last_seen",
+     "concentrated_in",
+     "support",
+     "recommendation"
+    ],
+    "title": "CorrectionInsight",
+    "type": "object"
+   },
+   "CorrectionInsightsResponse": {
+    "properties": {
+     "coverage": {
+      "$ref": "#/components/schemas/InsightsCoverage"
+     },
+     "field_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Field Name"
+     },
+     "insights": {
+      "items": {
+       "$ref": "#/components/schemas/CorrectionInsight"
+      },
+      "title": "Insights",
+      "type": "array"
+     },
+     "message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Message"
+     },
+     "since": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Since"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "until": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Until"
+     }
+    },
+    "required": [
+     "status",
+     "coverage",
+     "insights"
+    ],
+    "title": "CorrectionInsightsResponse",
+    "type": "object"
+   },
+   "FieldCoverage": {
+    "properties": {
+     "corrected": {
+      "title": "Corrected",
+      "type": "integer"
+     },
+     "field_name": {
+      "title": "Field Name",
+      "type": "string"
+     },
+     "reviewed": {
+      "title": "Reviewed",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "field_name",
+     "reviewed",
+     "corrected"
+    ],
+    "title": "FieldCoverage",
+    "type": "object"
+   },
+   "FieldResponse": {
+    "properties": {
+     "barcode_value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Barcode Value"
+     },
+     "box_source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Box Source"
+     },
+     "confidence": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Confidence"
+     },
+     "corrected_value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Corrected Value"
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "evidence": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Evidence"
+     },
+     "field_name": {
+      "title": "Field Name",
+      "type": "string"
+     },
+     "form_id": {
+      "title": "Form Id",
+      "type": "integer"
+     },
+     "height": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Height"
+     },
+     "id": {
+      "title": "Id",
+      "type": "integer"
+     },
+     "llm_value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Llm Value"
+     },
+     "ocr_value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ocr Value"
+     },
+     "page": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Page"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value"
+     },
+     "width": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Width"
+     },
+     "x": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "X"
+     },
+     "y": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Y"
+     }
+    },
+    "required": [
+     "id",
+     "form_id",
+     "field_name",
+     "status"
+    ],
+    "title": "FieldResponse",
+    "type": "object"
+   },
+   "FormDetailResponse": {
+    "properties": {
+     "duplicates": {
+      "items": {
+       "$ref": "#/components/schemas/CommitmentDuplicate"
+      },
+      "title": "Duplicates",
+      "type": "array"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/FieldResponse"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "file_hash": {
+      "title": "File Hash",
+      "type": "string"
+     },
+     "form_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Form Type"
+     },
+     "id": {
+      "title": "Id",
+      "type": "integer"
+     },
+     "image_path": {
+      "title": "Image Path",
+      "type": "string"
+     },
+     "page_number": {
+      "title": "Page Number",
+      "type": "integer"
+     },
+     "page_numbers": {
+      "items": {
+       "$ref": "#/components/schemas/PageNumber"
+      },
+      "title": "Page Numbers",
+      "type": "array"
+     },
+     "rejected_values": {
+      "additionalProperties": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "title": "Rejected Values",
+      "type": "object"
+     },
+     "source_file": {
+      "title": "Source File",
+      "type": "string"
+     },
+     "sources": {
+      "$ref": "#/components/schemas/FormSources"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "uploaded_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Uploaded At"
+     }
+    },
+    "required": [
+     "id",
+     "source_file",
+     "file_hash",
+     "page_number",
+     "image_path",
+     "status",
+     "sources"
+    ],
+    "title": "FormDetailResponse",
+    "type": "object"
+   },
+   "FormResponse": {
+    "properties": {
+     "duplicates": {
+      "items": {
+       "$ref": "#/components/schemas/CommitmentDuplicate"
+      },
+      "title": "Duplicates",
+      "type": "array"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/FieldResponse"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "file_hash": {
+      "title": "File Hash",
+      "type": "string"
+     },
+     "form_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Form Type"
+     },
+     "id": {
+      "title": "Id",
+      "type": "integer"
+     },
+     "image_path": {
+      "title": "Image Path",
+      "type": "string"
+     },
+     "page_number": {
+      "title": "Page Number",
+      "type": "integer"
+     },
+     "rejected_values": {
+      "additionalProperties": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "title": "Rejected Values",
+      "type": "object"
+     },
+     "source_file": {
+      "title": "Source File",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "uploaded_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Uploaded At"
+     }
+    },
+    "required": [
+     "id",
+     "source_file",
+     "file_hash",
+     "page_number",
+     "image_path",
+     "status"
+    ],
+    "title": "FormResponse",
+    "type": "object"
+   },
+   "FormSources": {
+    "description": "Raw result of each source for the page, exactly as stored (JSON).",
+    "properties": {
+     "barcode_result": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Barcode Result"
+     },
+     "llm_result": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Llm Result"
+     },
+     "ocr_result": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ocr Result"
+     },
+     "source_errors": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Errors"
+     }
+    },
+    "title": "FormSources",
+    "type": "object"
+   },
+   "FormsPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/FormResponse"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "FormsPage",
+    "type": "object"
+   },
+   "FormsSummary": {
+    "properties": {
+     "by_status": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "By Status",
+      "type": "object"
+     },
+     "fields_to_review": {
+      "title": "Fields To Review",
+      "type": "integer"
+     },
+     "pending": {
+      "title": "Pending",
+      "type": "integer"
+     },
+     "queue": {
+      "$ref": "#/components/schemas/QueueState"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "total",
+     "by_status",
+     "pending",
+     "fields_to_review",
+     "queue"
+    ],
+    "title": "FormsSummary",
+    "type": "object"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "title": "Detail",
+      "type": "array"
+     }
+    },
+    "title": "HTTPValidationError",
+    "type": "object"
+   },
+   "InsightConcentration": {
+    "description": "Where most of a pattern's events are (null: spread out, or unknown).",
+    "properties": {
+     "form_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Form Type"
+     },
+     "sender": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sender"
+     },
+     "written_as": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Written As"
+     }
+    },
+    "title": "InsightConcentration",
+    "type": "object"
+   },
+   "InsightsCoverage": {
+    "properties": {
+     "auto_accepted_fields": {
+      "title": "Auto Accepted Fields",
+      "type": "integer"
+     },
+     "by_field": {
+      "items": {
+       "$ref": "#/components/schemas/FieldCoverage"
+      },
+      "title": "By Field",
+      "type": "array"
+     },
+     "corrected_fields": {
+      "title": "Corrected Fields",
+      "type": "integer"
+     },
+     "required_reviewed_fields": {
+      "title": "Required Reviewed Fields",
+      "type": "integer"
+     },
+     "reviewed_fields": {
+      "title": "Reviewed Fields",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "reviewed_fields",
+     "corrected_fields",
+     "required_reviewed_fields",
+     "auto_accepted_fields",
+     "by_field"
+    ],
+    "title": "InsightsCoverage",
+    "type": "object"
+   },
+   "NumberBox": {
+    "properties": {
+     "height": {
+      "title": "Height",
+      "type": "number"
+     },
+     "width": {
+      "title": "Width",
+      "type": "number"
+     },
+     "x": {
+      "title": "X",
+      "type": "number"
+     },
+     "y": {
+      "title": "Y",
+      "type": "number"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "width",
+     "height"
+    ],
+    "title": "NumberBox",
+    "type": "object"
+   },
+   "PageNumber": {
+    "description": "A number (or date) found on the page by any source — see domain/page_numbers.py.",
+    "properties": {
+     "box": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/NumberBox"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "box_source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Box Source"
+     },
+     "boxes": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/NumberBox"
+      },
+      "title": "Boxes",
+      "type": "object"
+     },
+     "is_date": {
+      "default": false,
+      "title": "Is Date",
+      "type": "boolean"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "notes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+     },
+     "sources": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Sources",
+      "type": "array"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "value",
+     "sources"
+    ],
+    "title": "PageNumber",
+    "type": "object"
+   },
+   "QueueState": {
+    "properties": {
+     "pause_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pause Reason"
+     },
+     "paused_until": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Paused Until"
+     },
+     "running": {
+      "title": "Running",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "running"
+    ],
+    "title": "QueueState",
+    "type": "object"
+   },
+   "UploadItemResponse": {
+    "properties": {
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "filename": {
+      "description": "Original uploaded filename, sanitized",
+      "title": "Filename",
+      "type": "string"
+     },
+     "form_ids": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Form Ids",
+      "type": "array"
+     },
+     "status": {
+      "description": "created, duplicate, rejected",
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "filename",
+     "status"
+    ],
+    "title": "UploadItemResponse",
+    "type": "object"
+   },
+   "ValidationError": {
+    "properties": {
+     "ctx": {
+      "title": "Context",
+      "type": "object"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "title": "Location",
+      "type": "array"
+     },
+     "msg": {
+      "title": "Message",
+      "type": "string"
+     },
+     "type": {
+      "title": "Error Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError",
+    "type": "object"
+   },
+   "VerifyRequest": {
+    "properties": {
+     "code": {
+      "title": "Code",
+      "type": "string"
+     }
+    },
+    "required": [
+     "code"
+    ],
+    "title": "VerifyRequest",
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "title": "Document Intake API",
+  "version": "0.1.0"
+ },
+ "openapi": "3.1.0",
+ "paths": {
+  "/auth/logout": {
+   "post": {
+    "operationId": "logout_auth_logout_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Logout",
+    "tags": [
+     "auth"
+    ]
+   }
+  },
+  "/auth/request-code": {
+   "post": {
+    "operationId": "request_code_auth_request_code_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/CodeRequest"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Payload"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Request Code",
+    "tags": [
+     "auth"
+    ]
+   }
+  },
+  "/auth/status": {
+   "get": {
+    "description": "Whether login is required and whether this browser is logged in (also answered when it isn't).\nask_email: the login screen asks for an address (demo mode) instead of using the lab's mailbox.",
+    "operationId": "auth_status_auth_status_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Auth Status",
+    "tags": [
+     "auth"
+    ]
+   }
+  },
+  "/auth/verify": {
+   "post": {
+    "operationId": "verify_auth_verify_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VerifyRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Verify",
+    "tags": [
+     "auth"
+    ]
+   }
+  },
+  "/forms": {
+   "get": {
+    "operationId": "list_forms_forms_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 500,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "status",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "in": "query",
+      "name": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Query"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sort_by",
+      "required": false,
+      "schema": {
+       "default": "id",
+       "title": "Sort By",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sort_dir",
+      "required": false,
+      "schema": {
+       "default": "desc",
+       "pattern": "^(asc|desc)$",
+       "title": "Sort Dir",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FormsPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Forms",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/export": {
+   "get": {
+    "operationId": "export_forms_forms_export_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "mode",
+      "required": false,
+      "schema": {
+       "default": "all",
+       "title": "Mode",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "status",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "in": "query",
+      "name": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Query"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sort_by",
+      "required": false,
+      "schema": {
+       "default": "id",
+       "title": "Sort By",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sort_dir",
+      "required": false,
+      "schema": {
+       "default": "desc",
+       "pattern": "^(asc|desc)$",
+       "title": "Sort Dir",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Export Forms",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/summary": {
+   "get": {
+    "operationId": "forms_summary_forms_summary_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FormsSummary"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Forms Summary",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/{form_id}": {
+   "delete": {
+    "description": "Delete a form (one page) with its fields and its page image; the uploaded file goes with its last page.",
+    "operationId": "delete_form_forms__form_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "form_id",
+      "required": true,
+      "schema": {
+       "title": "Form Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Form",
+    "tags": [
+     "forms"
+    ]
+   },
+   "get": {
+    "operationId": "get_form_forms__form_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "form_id",
+      "required": true,
+      "schema": {
+       "title": "Form Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FormDetailResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Form",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/{form_id}/fields": {
+   "post": {
+    "description": "A value typed by the lab worker — works whether or not the form was (or could be) extracted.",
+    "operationId": "add_field_forms__form_id__fields_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "form_id",
+      "required": true,
+      "schema": {
+       "title": "Form Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AddFieldRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FormDetailResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Field",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/{form_id}/fields/{field_id}": {
+   "delete": {
+    "operationId": "delete_field_forms__form_id__fields__field_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "form_id",
+      "required": true,
+      "schema": {
+       "title": "Form Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "field_id",
+      "required": true,
+      "schema": {
+       "title": "Field Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FormDetailResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Field",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/{form_id}/fields/{field_id}/confirm": {
+   "patch": {
+    "operationId": "confirm_field_forms__form_id__fields__field_id__confirm_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "form_id",
+      "required": true,
+      "schema": {
+       "title": "Form Id",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "path",
+      "name": "field_id",
+      "required": true,
+      "schema": {
+       "title": "Field Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ConfirmFieldRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FormDetailResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Confirm Field",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/{form_id}/image": {
+   "get": {
+    "operationId": "get_form_image_forms__form_id__image_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "form_id",
+      "required": true,
+      "schema": {
+       "title": "Form Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Form Image",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/forms/{form_id}/retry": {
+   "post": {
+    "operationId": "retry_extraction_forms__form_id__retry_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "form_id",
+      "required": true,
+      "schema": {
+       "title": "Form Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FormDetailResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Retry Extraction",
+    "tags": [
+     "forms"
+    ]
+   }
+  },
+  "/health": {
+   "get": {
+    "operationId": "health_check_health_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": {
+          "type": "string"
+         },
+         "title": "Response Health Check Health Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Health Check"
+   }
+  },
+  "/insights/corrections": {
+   "get": {
+    "description": "Recurring patterns in the lab worker's corrections, with what to check for each. No field values or images.",
+    "operationId": "correction_insights_insights_corrections_get",
+    "parameters": [
+     {
+      "description": "Events from this time (ISO 8601; no zone = UTC)",
+      "in": "query",
+      "name": "since",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date-time",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Events from this time (ISO 8601; no zone = UTC)",
+       "title": "Since"
+      }
+     },
+     {
+      "description": "Events up to this time",
+      "in": "query",
+      "name": "until",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date-time",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Events up to this time",
+       "title": "Until"
+      }
+     },
+     {
+      "in": "query",
+      "name": "field_name",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Field Name"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CorrectionInsightsResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Correction Insights",
+    "tags": [
+     "insights"
+    ]
+   }
+  },
+  "/meta": {
+   "get": {
+    "operationId": "get_meta_meta_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Meta",
+    "tags": [
+     "meta"
+    ]
+   }
+  },
+  "/uploads": {
+   "post": {
+    "operationId": "upload_files_uploads_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_upload_files_uploads_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/UploadItemResponse"
+         },
+         "title": "Response Upload Files Uploads Post",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Upload Files",
+    "tags": [
+     "uploads"
+    ]
+   }
+  }
+ }
+}

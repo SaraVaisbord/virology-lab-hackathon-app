@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, MetaData, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from .constants import (
+from domain.vocabulary import (
     CHANGE_KINDS,
     CONFIDENCE_LEVELS,
     FIELD_EVENT_ACTIONS,
@@ -163,3 +163,18 @@ class Sender(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
+class LoginCode(Base):
+    """The one-time login code waiting to be entered (at most one at a time). Only a salted hash of the code is kept;
+    expired codes are deleted by the login service."""
+
+    __tablename__ = "login_codes"
+    __table_args__ = (CheckConstraint("attempts >= 0", name="attempts"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256(salt + code), hex
+    salt: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # wrong guesses so far
+    sent_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # naive UTC, like every other time column
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)

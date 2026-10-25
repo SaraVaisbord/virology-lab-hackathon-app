@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import alembic_config, make_form
-from validators import classify_change
+from domain.validators import classify_change
 
 # A commitment number the AI misread by one digit, while the barcode read it right.
 _MISREAD = {
@@ -76,8 +76,7 @@ def test_classify_change(field_name, before, after, kwargs, expected):
 # ── Recording, through the existing correction functions ────────────────────
 
 
-def test_first_correction_records_one_event_and_keeps_current_behaviour(app_env):
-    from db import queries
+def test_first_correction_records_one_event_and_keeps_current_behaviour(queries):
 
     form_id, ids = _form_with(queries, _MISREAD, llm_result={"all_numbers": [{"value": "47321", "kind": "handwritten"}]})
     form = queries.confirm_field(form_id, ids["commitment_number"], corrected_value="47381")
@@ -95,8 +94,7 @@ def test_first_correction_records_one_event_and_keeps_current_behaviour(app_env)
     assert event["created_at"] is not None
 
 
-def test_repeated_correction_appends_without_touching_earlier_events(app_env):
-    from db import queries
+def test_repeated_correction_appends_without_touching_earlier_events(queries):
 
     form_id, ids = _form_with(queries, _MISREAD)
     field_id = ids["commitment_number"]
@@ -118,8 +116,7 @@ def test_repeated_correction_appends_without_touching_earlier_events(app_env):
     assert _field(queries, form_id, field_id)["value"] == "47321"
 
 
-def test_unchanged_value(app_env):
-    from db import queries
+def test_unchanged_value(queries):
 
     form_id, ids = _form_with(queries, _ID)
     field_id = ids["id_number"]
@@ -140,8 +137,7 @@ def test_unchanged_value(app_env):
     assert _summary(queries.list_field_events(other_id), "action", "change_kind") == [("confirm", "none")]
 
 
-def test_approving_the_ai_value_and_correcting_it_later_are_told_apart(app_env):
-    from db import queries
+def test_approving_the_ai_value_and_correcting_it_later_are_told_apart(queries):
 
     form_id, ids = _form_with(queries, _MISREAD)
     queries.confirm_field(form_id, ids["commitment_number"], corrected_value=None)  # approves the AI's value
@@ -152,8 +148,7 @@ def test_approving_the_ai_value_and_correcting_it_later_are_told_apart(app_env):
     ]
 
 
-def test_history_stays_connected_across_replace_and_delete(app_env):
-    from db import queries
+def test_history_stays_connected_across_replace_and_delete(queries):
 
     form_id, ids = _form_with(queries, _DATE)
     queries.confirm_field(form_id, ids["received_date"], corrected_value=None)
@@ -175,8 +170,7 @@ def test_history_stays_connected_across_replace_and_delete(app_env):
     assert events[3]["field_id"] == _summary(queries.get_form(form_id)["fields"], "id")[0][0]
 
 
-def test_wrong_field_replace_add_and_delete(app_env):
-    from db import queries
+def test_wrong_field_replace_add_and_delete(queries):
 
     swapped = [
         {"field_name": "first_name", "value": "כהן", "llm_value": "כהן", "status": "verified"},
@@ -203,8 +197,7 @@ def test_wrong_field_replace_add_and_delete(app_env):
     assert events[3]["field_id"] is None and events[3]["before_origin"] == "machine"
 
 
-def test_replace_links_the_event_to_the_new_field(app_env):
-    from db import queries
+def test_replace_links_the_event_to_the_new_field(queries):
 
     form_id, ids = _form_with(queries, _DATE)
     form = queries.add_manual_field(form_id, "received_date", "03/02/2024", replace=True, picked_from="ocr", box=_BOX)
@@ -220,8 +213,7 @@ def test_replace_links_the_event_to_the_new_field(app_env):
     assert len(queries.list_field_events(form_id)) == 1
 
 
-def test_events_hold_no_field_values(app_env):
-    from db import queries
+def test_events_hold_no_field_values(queries):
 
     form_id, ids = _form_with(queries, _MISREAD, _ID, {"field_name": "first_name", "value": "ישראלה", "status": "verified"},
                               llm_result={"all_numbers": [{"value": "000000018", "kind": "printed"}]})
@@ -237,20 +229,20 @@ def test_events_hold_no_field_values(app_env):
 
 
 @pytest.mark.parametrize("action", ["confirm", "add", "delete"])
-def test_event_failure_rolls_back_the_correction(app_env, monkeypatch, action):
+def test_event_failure_rolls_back_the_correction(monkeypatch, action, queries):
     """A correction is never saved without its event: if the event can't be stored, the field stays as it was."""
-    from db import queries
+    from db.repositories import review
 
     form_id, ids = _form_with(queries, _MISREAD)
     before = queries.get_form(form_id)
-    real = queries._correction_event
+    real = review._correction_event
 
     def broken(*args, **kwargs):
         event = real(*args, **kwargs)
         event.action = "not-an-action"  # rejected by the table's check constraint at flush
         return event
 
-    monkeypatch.setattr(queries, "_correction_event", broken)
+    monkeypatch.setattr(review, "_correction_event", broken)
     with pytest.raises(IntegrityError):
         if action == "confirm":
             queries.confirm_field(form_id, ids["commitment_number"], corrected_value="47381")
@@ -266,9 +258,8 @@ def test_event_failure_rolls_back_the_correction(app_env, monkeypatch, action):
 
 
 @pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="row locks exist on PostgreSQL only")
-def test_concurrent_confirmations_record_one_event(app_env):
+def test_concurrent_confirmations_record_one_event(queries):
     """A double click sends two confirmations at once: the form's row lock lets only one of them record."""
-    from db import queries
 
     form_id, ids = _form_with(queries, _ID)
     start, errors = threading.Barrier(6), []
@@ -289,8 +280,7 @@ def test_concurrent_confirmations_record_one_event(app_env):
     assert _summary(queries.list_field_events(form_id), "action", "change_kind") == [("confirm", "none")]
 
 
-def test_deleting_the_form_deletes_its_events(app_env):
-    from db import queries
+def test_deleting_the_form_deletes_its_events(queries):
 
     form_id, ids = _form_with(queries, _MISREAD)
     queries.confirm_field(form_id, ids["commitment_number"], corrected_value="47381")
@@ -298,8 +288,7 @@ def test_deleting_the_form_deletes_its_events(app_env):
     assert queries.list_field_events(form_id) == []
 
 
-def test_api_correction_records_event_and_response_is_unchanged(client):
-    from db import queries
+def test_api_correction_records_event_and_response_is_unchanged(client, queries):
 
     form_id, ids = _form_with(queries, _MISREAD)
     response = client.patch(f"/forms/{form_id}/fields/{ids['commitment_number']}/confirm", json={"corrected_value": "47381"})
@@ -310,7 +299,7 @@ def test_api_correction_records_event_and_response_is_unchanged(client):
 
 def test_every_allowed_value_fits_its_column():
     """SQLite ignores VARCHAR lengths, PostgreSQL enforces them — catch a value that is too long before it gets there."""
-    from db.constants import CHANGE_KINDS, CONFIDENCE_LEVELS, FIELD_EVENT_ACTIONS, FIELD_STATUSES, FIELDS, INVENTORY_KINDS, SOURCE_LABELS, VALUE_ORIGINS
+    from domain.vocabulary import CHANGE_KINDS, CONFIDENCE_LEVELS, FIELD_EVENT_ACTIONS, FIELD_STATUSES, FIELDS, INVENTORY_KINDS, SOURCE_LABELS, VALUE_ORIGINS
     from db.models import FieldEvent
 
     columns = FieldEvent.__table__.columns
@@ -325,11 +314,10 @@ def test_every_allowed_value_fits_its_column():
     assert too_long == {}
 
 
-def test_migration_adds_and_removes_the_table(app_env):
-    import db.session
+def test_migration_adds_and_removes_the_table(settings):
 
     def tables():
-        engine = create_engine(db.session.DATABASE_URL, future=True)
+        engine = create_engine(settings.database_url, future=True)
         try:
             return set(inspect(engine).get_table_names())
         finally:

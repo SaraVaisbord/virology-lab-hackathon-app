@@ -1,0 +1,200 @@
+name: CI/CD
+
+# Pull request to master: tests only. Merge (push) to master: tests → images in ECR under a new version tag →
+# the tag set in the Kubernetes repository and applied to the EKS cluster.
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  # The manifests and the cluster they deploy to (its cluster.env: region, cluster name; kustomization.yaml: ECR images).
+  K8S_REPOSITORY: SaraVaisbord/virology-lab-hackathon-k8s
+
+jobs:
+  backend:
+    name: Backend (${{ matrix.database }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, postgresql]
+    services:
+      postgres:
+        image: ${{ matrix.database == 'postgresql' && 'postgres:16' || '' }}   # the RDS engine version; none for SQLite
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: forms
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # the server image
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: System libraries (barcodes, OCR), as in the server image
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzbar0 tesseract-ocr tesseract-ocr-heb
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Tests
+        env:
+          TESSERACT_CMD: /usr/bin/tesseract
+          OCR_TESSDATA_DIR: /usr/share/tesseract-ocr/5/tessdata
+          TEST_DATABASE_URL: ${{ matrix.database == 'postgresql' && 'postgresql+psycopg://postgres:ci@localhost:5432/forms' || '' }}
+        run: pytest
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"   # the interface image
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  release:
+    name: Release to ECR
+    if: github.event_name == 'push'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    concurrency: release   # one release at a time, in merge order
+    permissions:
+      contents: write      # the version tag
+      id-token: write      # AWS through OIDC, no stored keys
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      region: ${{ steps.cluster.outputs.region }}
+      cluster: ${{ steps.cluster.outputs.cluster }}
+      domain: ${{ steps.cluster.outputs.domain }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # all tags and commits, to find the previous version
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.K8S_REPOSITORY }}
+          token: ${{ secrets.K8S_REPO_TOKEN }}
+          path: k8s
+
+      # Patch by default; "#minor" or "#major" in a commit message since the last version bumps that part instead.
+      - name: Next version
+        id: version
+        run: |
+          last=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          if [ -z "$last" ]; then
+            version=v1.0.0
+          else
+            IFS=. read -r major minor patch <<< "${last#v}"
+            messages=$(git log "$last..HEAD" --format=%B)
+            if grep -q '#major' <<< "$messages"; then version="v$((major + 1)).0.0"
+            elif grep -q '#minor' <<< "$messages"; then version="v$major.$((minor + 1)).0"
+            else version="v$major.$minor.$((patch + 1))"; fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Previous: ${last:-none} → $version"
+
+      - name: Cluster values
+        id: cluster
+        run: |
+          value() { sed -n "s/^$1=//p" k8s/cluster.env; }
+          image() { yq ".images[] | select(.name == \"$1\") | .newName" k8s/kustomization.yaml; }
+          {
+            echo "region=$(value AWS_REGION)"
+            echo "cluster=$(value EKS_CLUSTER)"
+            echo "domain=$(value DOMAIN)"
+            echo "backend_image=$(image backend)"
+            echo "frontend_image=$(image frontend)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ steps.cluster.outputs.region }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: ${{ steps.cluster.outputs.backend_image }}:${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+      - name: Frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          build-args: VITE_API_BASE_URL=/api
+          tags: ${{ steps.cluster.outputs.frontend_image }}:${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+      # Only once both images exist: a version tag always has its images.
+      - name: Version tag
+        run: |
+          git tag "${{ steps.version.outputs.version }}" "$GITHUB_SHA"
+          git push origin "${{ steps.version.outputs.version }}"
+
+  deploy:
+    name: Deploy to EKS
+    needs: release
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    environment:
+      name: production
+      url: https://${{ needs.release.outputs.domain }}
+    permissions:
+      id-token: write
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      REGION: ${{ needs.release.outputs.region }}
+      CLUSTER: ${{ needs.release.outputs.cluster }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.K8S_REPOSITORY }}
+          token: ${{ secrets.K8S_REPO_TOKEN }}
+          path: k8s
+
+      # The Kubernetes repository records what runs in the cluster: one commit per release.
+      - name: Set the image tags
+        working-directory: k8s
+        run: |
+          yq -i '(.images[] | select(.name == "backend" or .name == "frontend")).newTag = strenv(VERSION)' kustomization.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git diff --quiet && echo "Already at $VERSION (a re-run)" && exit 0
+          git commit -am "deploy $VERSION" -m "From ${{ github.repository }}@${{ github.sha }}"
+          git push
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.REGION }}
+
+      - name: Apply
+        run: |
+          aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER"
+          kubectl apply -k k8s
+          kubectl -n virology-lab rollout status deployment/backend --timeout=10m
+          kubectl -n virology-lab rollout status deployment/frontend --timeout=5m

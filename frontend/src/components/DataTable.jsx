@@ -4,6 +4,7 @@ import StatusBadge from './ui/StatusBadge'
 import { useMeta } from '../meta/MetaContext'
 import { useClickOutside } from '../hooks/useClickOutside'
 import { EMPTY, fieldDisplayValue, formatDateTime, groupFieldsByName } from '../lib/format'
+import { FORM_STATUS } from '../lib/domainKeys'
 
 const LEADING_COLUMNS = ['source_file', 'page_number', 'status']
 const TRAILING_COLUMNS = ['uploaded_at']
@@ -106,7 +107,7 @@ export default function DataTable({ forms, total, loading, loadingMore, hasMore,
         return (
           <div className="flex flex-col items-start gap-1">
             <StatusBadge status={form.status} />
-            {form.status === 'failed' && form.error && (
+            {form.status === FORM_STATUS.FAILED && form.error && (
               <span className="max-w-[14rem] text-[11px] leading-4 text-red-600 dark:text-red-400">{form.error}</span>
             )}
           </div>
@@ -192,7 +193,7 @@ export default function DataTable({ forms, total, loading, loadingMore, hasMore,
                         <button type="button" onClick={() => onEditForm(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={`ערוך את שדות ${form.source_file}`} title="עריכת שדות">
                           <Pencil size={15} />
                         </button>
-                        {form.status === 'failed' && (
+                        {form.status === FORM_STATUS.FAILED && (
                           <button type="button" onClick={() => onRetry(form)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40" aria-label={`נסה שוב לעבד את ${form.source_file}`} title="נסה שוב">
                             <RotateCcw size={15} />
                           </button>
@@ -210,10 +211,10 @@ export default function DataTable({ forms, total, loading, loadingMore, hasMore,
                           <button
                             type="button"
                             onClick={() => setConfirmDelete(form.id)}
-                            disabled={form.status === 'processing'}
+                            disabled={form.status === FORM_STATUS.PROCESSING}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-red-950/40"
                             aria-label={`מחק את ${form.source_file}`}
-                            title={form.status === 'processing' ? 'הטופס בעיבוד כרגע – אפשר למחוק אחרי שיסתיים' : 'מחיקת רשומה'}
+                            title={form.status === FORM_STATUS.PROCESSING ? 'הטופס בעיבוד כרגע – אפשר למחוק אחרי שיסתיים' : 'מחיקת רשומה'}
                           >
                             <Trash2 size={15} />
                           </button>

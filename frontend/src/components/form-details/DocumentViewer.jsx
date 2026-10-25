@@ -55,7 +55,7 @@ export default function DocumentViewer({ imageUrl, field, focus, onClearFocus, a
           תצוגת מסמך
           {focus ? (
             <span className="mr-2 inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
-              מוצג: <span dir="ltr" className="font-mono">{focus.value}</span> (לפי {meta.source_labels[focus.boxSource]})
+              מוצג: <span dir="ltr" className="font-mono">{focus.value}</span> (לפי {meta.source_labels[focus.box_source]})
               <button type="button" onClick={onClearFocus} aria-label="הסר הדגשה" className="rounded-full p-0.5 hover:bg-teal-100 dark:hover:bg-teal-900"><X size={11} /></button>
             </span>
           ) : fieldBox && field.box_source ? (
