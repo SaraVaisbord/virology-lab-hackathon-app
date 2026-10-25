@@ -137,7 +137,7 @@ def _digit_word(mask: np.ndarray, settings: HandwritingSettings) -> np.ndarray |
     lines: list[list] = []
     for blob in sorted(digit_like, key=lambda b: b[1] + b[3] / 2):
         center = blob[1] + blob[3] / 2
-        line = next((l for l in lines if abs(np.mean([b[1] + b[3] / 2 for b in l]) - center) < 0.6 * median_h), None)
+        line = next((row for row in lines if abs(np.mean([b[1] + b[3] / 2 for b in row]) - center) < 0.6 * median_h), None)
         if line is None:
             lines.append([blob])
         else:

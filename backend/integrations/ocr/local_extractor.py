@@ -154,7 +154,7 @@ class LocalResult:
             "form_type": self.form_type,
             "sample_is_commitment": self.sample_is_commitment,
             "candidates": [asdict(c) for c in self.candidates],
-            "labels": [{"field": l.field, "text": l.text, "box": asdict(l.box)} for l in self.labels],
+            "labels": [{"field": lb.field, "text": lb.text, "box": asdict(lb.box)} for lb in self.labels],
             "unassigned_numbers": self.unassigned_numbers,
         }
 
@@ -543,7 +543,7 @@ def _extract(ocr: OcrEngine, views: PageViews, barcodes: list[dict] | None, word
     # The two OCR passes often both read the same printed label — keep one, or it would claim two values.
     labels: list[Label] = []
     for label in _find_labels(lines, settings, sample_label):
-        if not any(l.field == label.field and _overlap(l.box, label.box) > 0.3 for l in labels):
+        if not any(kept.field == label.field and _overlap(kept.box, label.box) > 0.3 for kept in labels):
             labels.append(label)
 
     barcode_tokens = [

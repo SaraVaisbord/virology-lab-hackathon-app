@@ -6,7 +6,6 @@ Output: input_report.pdf (next to the input file)
 
 import sys
 import io
-import os
 from pathlib import Path
 
 # Force UTF-8 output on Windows terminal
@@ -24,7 +23,7 @@ from reportlab.platypus import (
     Image as RLImage, PageBreak, HRFlowable
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from bidi.algorithm import get_display
